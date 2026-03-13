@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+aiohue==4.7.1
+apscheduler==3.10.4
+aiosqlite==0.20.0
+astral==3.2
+hijri-converter==2.3.1
+httpx==0.28.1
+zeroconf==0.136.2
+cryptography==44.0.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1

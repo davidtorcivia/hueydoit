@@ -1,0 +1,17 @@
+services:
+  huey-do-it:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - HUE_CONTROLLER_PORT=${HUE_CONTROLLER_PORT:-8585}
+      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+      - LATITUDE=${LATITUDE:-40.704941}
+      - LONGITUDE=${LONGITUDE:--73.914642}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - TZ=${TZ:-America/New_York}
+      - HUE_BRIDGE_IP=${HUE_BRIDGE_IP:-}
+      - EXTERNAL_OVERRIDE_TIMEOUT_MIN=${EXTERNAL_OVERRIDE_TIMEOUT_MIN:-30}
+      - DB_PATH=data/huey-do-it.db
+    volumes:
+      - ./data:/app/data

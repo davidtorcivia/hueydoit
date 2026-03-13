@@ -1,0 +1,296 @@
+import json
+import logging
+from datetime import datetime, timedelta, timezone
+
+from app.database import get_db, add_log
+from app.engine.state import state_manager
+from app.bridge.client import bridge_client
+from app.bridge.effects import build_light_command
+from app.ws import ws_manager
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_duration(s: str) -> timedelta:
+    """Parse duration strings like '15m', '1h', '30s'."""
+    s = s.strip().lower()
+    if s.endswith("m"):
+        return timedelta(minutes=int(s[:-1]))
+    if s.endswith("h"):
+        return timedelta(hours=int(s[:-1]))
+    if s.endswith("s"):
+        return timedelta(seconds=int(s[:-1]))
+    return timedelta(minutes=int(s))
+
+
+class RuleEvaluator:
+    async def evaluate_all(self):
+        await state_manager.cleanup_expired_overrides()
+
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT id, name, priority, config FROM rules WHERE enabled = 1 ORDER BY priority ASC"
+            )
+            rules = await cursor.fetchall()
+
+            cursor = await db.execute("SELECT name, type, hue_id FROM targets")
+            targets = await cursor.fetchall()
+
+        if not rules:
+            return
+
+        target_map = {row[0]: {"name": row[0], "type": row[1], "hue_id": row[2]} for row in targets}
+        if not target_map:
+            return
+
+        provider_states = state_manager.get_all_provider_states()
+
+        # Always inject fresh time state — no need to poll for this
+        import zoneinfo
+        from app.config import settings
+        tz = zoneinfo.ZoneInfo(settings.tz)
+        now_local = datetime.now(tz)
+        provider_states["time"] = {
+            "hour": now_local.hour,
+            "minute": now_local.minute,
+            "second": now_local.second,
+            "day_of_week": now_local.strftime("%A").lower(),
+            "date": now_local.strftime("%Y-%m-%d"),
+            "is_weekend": now_local.weekday() >= 5,
+            "month": now_local.month,
+            "day": now_local.day,
+            "year": now_local.year,
+        }
+
+        target_assignments: dict[str, dict] = {}
+
+        for rule_row in rules:
+            rule_id = rule_row[0]
+            rule_name = rule_row[1]
+            rule_priority = rule_row[2]
+            try:
+                config = json.loads(rule_row[3]) if isinstance(rule_row[3], str) else rule_row[3]
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("Invalid config for rule %s", rule_name)
+                continue
+
+            condition = config.get("condition", {})
+            effect = config.get("effect", {})
+            rule_targets = config.get("targets", [])
+
+            raw_match = self._match_condition(condition, provider_states)
+            final_match = self._apply_hysteresis(rule_id, condition, raw_match, provider_states)
+
+            state_manager.set_hysteresis(
+                rule_id,
+                was_active=final_match,
+                condition_true_since=(
+                    state_manager.get_hysteresis(rule_id)["condition_true_since"]
+                    if final_match
+                    else None
+                ),
+            )
+
+            if not final_match:
+                continue
+
+            for target_name in rule_targets:
+                if target_name in target_assignments:
+                    continue
+                if target_name not in target_map:
+                    continue
+                target_assignments[target_name] = {
+                    "rule_id": rule_id,
+                    "rule_name": rule_name,
+                    "priority": rule_priority,
+                    "effect": effect,
+                    "condition": condition,
+                }
+
+        has_catchall = False
+        for rule_row in rules:
+            try:
+                config = json.loads(rule_row[3]) if isinstance(rule_row[3], str) else rule_row[3]
+            except (json.JSONDecodeError, TypeError):
+                continue
+            cond = config.get("condition", {})
+            if cond.get("match") == "always":
+                has_catchall = True
+                break
+
+        for target_name, target_info in target_map.items():
+            override = await state_manager.get_override(target_name)
+            if override:
+                continue
+
+            assignment = target_assignments.get(target_name)
+
+            if assignment:
+                prev_rule = state_manager.get_active_rule(target_name)
+                prev_id = prev_rule.get("rule_id") if prev_rule else None
+
+                state_manager.set_active_rule(target_name, assignment)
+
+                effect = dict(assignment["effect"])
+
+                # Dynamic holiday colors: inject active holiday palette
+                if effect.get("use_holiday_colors"):
+                    holiday_state = provider_states.get("holiday", {})
+                    active_colors = holiday_state.get("active_colors", [])
+                    if active_colors:
+                        effect["colors"] = active_colors
+
+                # Per-light color map: override colors for this specific target
+                color_map = effect.pop("color_map", None)
+                if color_map and target_name in color_map:
+                    effect["colors"] = [color_map[target_name]]
+
+                cmd = build_light_command(effect, target_info["type"])
+
+                if bridge_client.connected:
+                    await bridge_client.set_light_state(
+                        target_info["type"], target_info["hue_id"], cmd
+                    )
+
+                if prev_id != assignment["rule_id"]:
+                    await ws_manager.broadcast(
+                        "rule_activated",
+                        {"target": target_name, "rule": assignment["rule_name"]},
+                    )
+                    await add_log(
+                        "info",
+                        "evaluator",
+                        f"Rule '{assignment['rule_name']}' activated for {target_name}",
+                        {"rule_id": assignment["rule_id"], "target": target_name},
+                    )
+            elif not has_catchall:
+                state_manager.set_active_rule(target_name, None)
+                if bridge_client.connected:
+                    await bridge_client.set_light_state(
+                        target_info["type"],
+                        target_info["hue_id"],
+                        {"on": {"on": False}},
+                    )
+
+        await state_manager.persist_hysteresis()
+
+    def _match_condition(self, condition: dict, provider_states: dict) -> bool:
+        if condition.get("match") == "always":
+            return True
+
+        if "any_of" in condition:
+            return any(
+                self._match_condition(sub, provider_states) for sub in condition["any_of"]
+            )
+
+        provider_name = condition.get("provider")
+        match_block = condition.get("match", {})
+
+        if isinstance(match_block, str):
+            return match_block == "always"
+
+        if provider_name:
+            state = provider_states.get(provider_name)
+            if state is None:
+                return False
+            return self._match_block(match_block, state)
+        else:
+            return self._match_block(match_block, provider_states)
+
+    def _match_block(self, match: dict, state: dict) -> bool:
+        for key, expected in match.items():
+            value = self._resolve_dot_path(state, key)
+            if value is None:
+                return False
+
+            if isinstance(expected, dict):
+                if "gt" in expected and not (value > expected["gt"]):
+                    return False
+                if "gte" in expected and not (value >= expected["gte"]):
+                    return False
+                if "lt" in expected and not (value < expected["lt"]):
+                    return False
+                if "lte" in expected and not (value <= expected["lte"]):
+                    return False
+                if "in" in expected:
+                    if isinstance(value, str):
+                        value_lower = value.lower()
+                    else:
+                        value_lower = value
+                    expected_set = [
+                        v.lower() if isinstance(v, str) else v for v in expected["in"]
+                    ]
+                    if value_lower not in expected_set:
+                        return False
+            else:
+                if isinstance(value, str) and isinstance(expected, str):
+                    if value.lower() != expected.lower():
+                        return False
+                elif value != expected:
+                    return False
+        return True
+
+    def _apply_hysteresis(
+        self, rule_id: int, condition: dict, raw_match: bool, provider_states: dict
+    ) -> bool:
+        hyst = state_manager.get_hysteresis(rule_id)
+        was_active = hyst["was_active"]
+
+        deadband = condition.get("deadband")
+        if deadband is not None and was_active and not raw_match:
+            match_block = condition.get("match", {})
+            if isinstance(match_block, dict):
+                provider_name = condition.get("provider")
+                state = provider_states.get(provider_name, {}) if provider_name else provider_states
+                still_in_band = True
+                for key, expected in match_block.items():
+                    if isinstance(expected, dict):
+                        value = self._resolve_dot_path(state, key)
+                        if value is None:
+                            still_in_band = False
+                            break
+                        if "gte" in expected and value < (expected["gte"] - deadband):
+                            still_in_band = False
+                        if "gt" in expected and value <= (expected["gt"] - deadband):
+                            still_in_band = False
+                        if "lte" in expected and value > (expected["lte"] + deadband):
+                            still_in_band = False
+                        if "lt" in expected and value >= (expected["lt"] + deadband):
+                            still_in_band = False
+                if still_in_band:
+                    return True
+
+        duration_str = condition.get("for")
+        if duration_str and raw_match:
+            duration = _parse_duration(duration_str)
+            now = datetime.now(timezone.utc)
+            condition_true_since = hyst["condition_true_since"]
+            if condition_true_since is None:
+                state_manager.set_hysteresis(rule_id, was_active=False, condition_true_since=now)
+                return False
+            if (now - condition_true_since) < duration:
+                return False
+
+        if raw_match and not hyst["condition_true_since"]:
+            state_manager.set_hysteresis(
+                rule_id,
+                was_active=was_active,
+                condition_true_since=datetime.now(timezone.utc),
+            )
+
+        return raw_match
+
+    def _resolve_dot_path(self, data: dict, path: str):
+        parts = path.split(".")
+        current = data
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                return None
+            if current is None:
+                return None
+        return current
+
+
+evaluator = RuleEvaluator()

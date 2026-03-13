@@ -1,0 +1,15 @@
+# Dependencies
+frontend/node_modules/
+__pycache__/
+*.pyc
+
+# Build output
+frontend/dist/
+
+# Data & secrets
+data/
+.env
+
+# IDE
+.vscode/
+.idea/
