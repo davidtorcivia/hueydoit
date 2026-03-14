@@ -1,6 +1,7 @@
 <script>
   import ColorPicker from '../components/ColorPicker.svelte';
   import { api } from '../lib/api.js';
+  import { toast } from '../lib/toast.js';
   import { suggestPalettes } from '../lib/paletteSuggest.js';
 
   let holidays = $state([]);
@@ -48,7 +49,7 @@
       newName = ''; newDate = ''; newWindowStart = ''; newWindowEnd = '';
       await loadHolidays();
     } catch (e) {
-      alert('Add failed: ' + e.message);
+      toast.error('Add failed: ' + e.message);
     }
   }
 
@@ -58,12 +59,13 @@
       await api.removeHoliday(id);
       await loadHolidays();
     } catch (e) {
-      alert('Remove failed: ' + e.message);
+      toast.error('Remove failed: ' + e.message);
     }
   }
 
   let editWindowBefore = $state(0);
   let editWindowAfter = $state(0);
+  let editPriority = $state(50);
   let editName = $state('');
   let editSlugForSuggest = $state('');
   let suggestions = $state([]);
@@ -73,6 +75,7 @@
     editColors = [...(h.colors || [])];
     editWindowBefore = h.window_before_days ?? 0;
     editWindowAfter = h.window_after_days ?? 0;
+    editPriority = h.priority ?? 50;
     editName = h.name;
     editSlugForSuggest = h.slug;
     suggestions = [];
@@ -101,12 +104,13 @@
         colors: editColors,
         window_before_days: editWindowBefore,
         window_after_days: editWindowAfter,
+        priority: editPriority,
       });
       editingSlug = null;
       suggestions = [];
       await loadHolidays();
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     }
   }
 
@@ -115,8 +119,16 @@
       await api.updateHolidayConfig(h.slug, { enabled: !h.enabled });
       await loadHolidays();
     } catch (e) {
-      alert('Toggle failed: ' + e.message);
+      toast.error('Toggle failed: ' + e.message);
     }
+  }
+
+  function windowPreview(dateStr, before, after) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const ws = new Date(d.getTime() - before * 86400000);
+    const we = new Date(d.getTime() + after * 86400000);
+    const fmt = { month: 'short', day: 'numeric' };
+    return `${ws.toLocaleDateString('en-US', fmt)} – ${we.toLocaleDateString('en-US', fmt)}`;
   }
 
   function isActive(h) {
@@ -143,6 +155,9 @@
       <option value="all">All</option>
       <option value="us_federal">US Federal</option>
       <option value="cultural">Cultural</option>
+      <option value="international">International</option>
+      <option value="fun">Fun</option>
+      <option value="seasonal">Seasonal</option>
       <option value="custom">Custom</option>
     </select>
     <button class="primary" onclick={() => showAdd = true}>+ Add Holiday</button>
@@ -162,7 +177,7 @@
             <div class="toggle" class:active={h.enabled} onclick={() => toggleEnabled(h)}></div>
           </div>
         </div>
-        <div class="holiday-date">{h.date}</div>
+        <div class="holiday-date">{h.date} <span class="priority-badge">P{h.priority ?? '?'}</span></div>
         {#if h.window_start !== h.date || h.window_end !== h.date}
           <div class="holiday-window">Window: {h.window_start} — {h.window_end}</div>
         {/if}
@@ -188,13 +203,30 @@
             <div class="edit-section">
               <label class="edit-label">Active window</label>
               <div class="window-slider">
-                <span class="slider-label">{editWindowBefore} days before</span>
+                <div class="slider-header">
+                  <span>Days before</span>
+                  <span class="slider-value">{editWindowBefore}</span>
+                </div>
                 <input type="range" min="0" max="60" bind:value={editWindowBefore} />
               </div>
               <div class="window-slider">
-                <span class="slider-label">{editWindowAfter} days after</span>
+                <div class="slider-header">
+                  <span>Days after</span>
+                  <span class="slider-value">{editWindowAfter}</span>
+                </div>
                 <input type="range" min="0" max="60" bind:value={editWindowAfter} />
               </div>
+              <div class="window-preview">
+                Active: {windowPreview(h.date, editWindowBefore, editWindowAfter)}
+              </div>
+            </div>
+            <div class="edit-section">
+              <label class="edit-label">Priority (lower = wins over others)</label>
+              <div class="slider-header">
+                <span>Priority</span>
+                <span class="slider-value">{editPriority}</span>
+              </div>
+              <input type="range" min="1" max="100" bind:value={editPriority} />
             </div>
             <div class="flex gap-2 mt-2">
               <button class="small primary" onclick={() => saveConfig(h.slug)}>Save</button>
@@ -278,6 +310,7 @@
   .holiday-card.active-holiday { border-color: var(--success); }
   .holiday-card.disabled-holiday { opacity: 0.5; }
   .holiday-date { font-size: 14px; color: var(--text-secondary); }
+  .priority-badge { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
   .holiday-window { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .holiday-colors-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -291,12 +324,15 @@
   .edit-panel {
     padding: 12px; background: var(--bg-input); border-radius: var(--radius);
     display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden;
   }
   .edit-section { display: flex; flex-direction: column; gap: 6px; }
   .edit-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-  .window-slider { display: flex; align-items: center; gap: 8px; }
-  .window-slider input[type="range"] { flex: 1; }
-  .slider-label { font-size: 13px; min-width: 110px; }
+  .window-slider { display: flex; flex-direction: column; gap: 4px; }
+  .window-slider input[type="range"] { width: 100%; }
+  .slider-header { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+  .slider-value { color: var(--accent); font-weight: 600; }
+  .window-preview { font-size: 12px; color: var(--accent); margin-top: 4px; }
   .palette-suggestions {
     display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
   }

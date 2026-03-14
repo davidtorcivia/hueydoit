@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS bridge (
     id INTEGER PRIMARY KEY DEFAULT 1,
     host TEXT NOT NULL,
@@ -76,7 +81,8 @@ CREATE TABLE IF NOT EXISTS holiday_config (
     colors JSON,
     enabled BOOLEAN DEFAULT 1,
     window_before_days INTEGER,
-    window_after_days INTEGER
+    window_after_days INTEGER,
+    priority INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS logs (
@@ -89,6 +95,48 @@ CREATE TABLE IF NOT EXISTS logs (
 );
 """
 
+# Versioned migrations — each entry is (version, list_of_sql_statements).
+# Add new migrations at the end with the next version number.
+MIGRATIONS: list[tuple[int, list[str]]] = [
+    (1, [
+        "ALTER TABLE holiday_config ADD COLUMN window_before_days INTEGER",
+        "ALTER TABLE holiday_config ADD COLUMN window_after_days INTEGER",
+    ]),
+    (2, [
+        "ALTER TABLE holiday_config ADD COLUMN priority INTEGER",
+    ]),
+]
+
+
+async def _get_schema_version(db: aiosqlite.Connection) -> int:
+    cursor = await db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    )
+    if not await cursor.fetchone():
+        return 0
+    cursor = await db.execute("SELECT MAX(version) FROM schema_version")
+    row = await cursor.fetchone()
+    return row[0] if row and row[0] else 0
+
+
+async def _run_migrations(db: aiosqlite.Connection):
+    current = await _get_schema_version(db)
+    for version, statements in MIGRATIONS:
+        if version <= current:
+            continue
+        for sql in statements:
+            try:
+                await db.execute(sql)
+            except Exception as e:
+                # Column already exists etc. — safe to skip
+                if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                    logger.debug("Migration %d skipped (already applied): %s", version, e)
+                else:
+                    raise
+        await db.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (?)", (version,))
+        logger.info("Applied migration %d", version)
+    await db.commit()
+
 
 async def init_db():
     db_path = settings.db_path
@@ -96,14 +144,7 @@ async def init_db():
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     async with aiosqlite.connect(db_path) as db:
         await db.executescript(SCHEMA)
-        # Migrate: add window columns to holiday_config if missing
-        cursor = await db.execute("PRAGMA table_info(holiday_config)")
-        cols = {row[1] for row in await cursor.fetchall()}
-        if "window_before_days" not in cols:
-            await db.execute("ALTER TABLE holiday_config ADD COLUMN window_before_days INTEGER")
-        if "window_after_days" not in cols:
-            await db.execute("ALTER TABLE holiday_config ADD COLUMN window_after_days INTEGER")
-        await db.commit()
+        await _run_migrations(db)
     logger.info("Database initialized at %s", db_path)
 
 
@@ -118,7 +159,6 @@ async def get_db():
 
 
 async def add_log(level: str, source: str, message: str, details: dict | None = None):
-    import json
     async with get_db() as db:
         await db.execute(
             "INSERT INTO logs (level, source, message, details) VALUES (?, ?, ?, ?)",

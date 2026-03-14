@@ -15,6 +15,7 @@ class StateManager:
         self._active_rules: dict[str, dict | None] = {}
         self._overrides: dict[str, dict] = {}
         self._rule_hysteresis: dict[int, dict] = {}
+        self._breathing_targets: dict[str, dict] = {}  # target_name -> {type, hue_id}
 
     async def load_from_db(self):
         async with get_db() as db:
@@ -171,12 +172,21 @@ class StateManager:
             {"was_active": False, "condition_true_since": None, "last_evaluated": None},
         )
 
+    def clear_hysteresis(self, rule_id: int):
+        self._rule_hysteresis.pop(rule_id, None)
+
     def set_hysteresis(self, rule_id: int, was_active: bool, condition_true_since: datetime | None):
         self._rule_hysteresis[rule_id] = {
             "was_active": was_active,
             "condition_true_since": condition_true_since,
             "last_evaluated": datetime.now(timezone.utc),
         }
+
+    def get_breathing_targets(self) -> dict[str, dict]:
+        return dict(self._breathing_targets)
+
+    def set_breathing_targets(self, targets: dict[str, dict]):
+        self._breathing_targets = targets
 
     async def persist_hysteresis(self):
         async with get_db() as db:

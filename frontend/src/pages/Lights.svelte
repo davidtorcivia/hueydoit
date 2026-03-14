@@ -1,5 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
+  import { toast } from '../lib/toast.js';
   import { addWSListener } from '../lib/websocket.js';
 
   let lights = $state([]);
@@ -33,7 +34,7 @@
       bridgeLights = result.lights || [];
       bridgeGroups = result.groups || [];
     } catch (e) {
-      alert('Failed to query bridge: ' + e.message);
+      toast.error('Failed to query bridge: ' + e.message);
       bridgeLights = [];
       bridgeGroups = [];
     }
@@ -51,7 +52,7 @@
       addingName = '';
       await loadLights();
     } catch (e) {
-      alert('Add failed: ' + e.message);
+      toast.error('Add failed: ' + e.message);
     }
   }
 

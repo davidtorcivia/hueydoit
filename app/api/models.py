@@ -118,6 +118,7 @@ class HolidayConfigUpdate(BaseModel):
     enabled: bool | None = None
     window_before_days: int | None = None
     window_after_days: int | None = None
+    priority: int | None = None
 
 
 class ProviderStatus(BaseModel):

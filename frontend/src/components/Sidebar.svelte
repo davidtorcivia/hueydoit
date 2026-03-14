@@ -1,7 +1,7 @@
 <script>
-  let { currentPage, onNavigate, bridgeConnected } = $props();
+  let { currentPage, onNavigate, bridgeConnected, setupComplete = false } = $props();
 
-  const navItems = [
+  const allNavItems = [
     { id: 'setup', label: 'Setup', icon: '🔧' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'rules', label: 'Rules', icon: '📋' },
@@ -10,6 +10,10 @@
     { id: 'holidays', label: 'Holidays', icon: '🎄' },
     { id: 'logs', label: 'Logs', icon: '📜' },
   ];
+
+  let navItems = $derived(
+    setupComplete ? allNavItems.filter(i => i.id !== 'setup') : allNavItems
+  );
 </script>
 
 <nav class="sidebar">

@@ -28,6 +28,7 @@ export const api = {
   updateRule: (id, data) => request('PUT', `/api/rules/${id}`, data),
   deleteRule: (id) => request('DELETE', `/api/rules/${id}`),
   reorderRules: (rules) => request('PUT', '/api/rules/reorder', { rules }),
+  triggerRule: (id) => request('POST', `/api/rules/${id}/trigger`),
   testRule: (condition) => request('POST', '/api/rules/test', { condition }),
 
   getProviders: () => request('GET', '/api/providers'),

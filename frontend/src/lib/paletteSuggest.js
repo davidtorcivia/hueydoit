@@ -34,6 +34,35 @@ const HOLIDAY_PALETTES = {
   diwali:           [['#ffd700', '#ff6600', '#ff0066'], ['#ffcc00', '#ff5500', '#ff00aa'], ['#ffd700', '#ff4500', '#ff1493']],
   hanukkah:         [['#4488ff', '#ffeedd', '#66aaff'], ['#3377ee', '#ffeedd', '#88bbff'], ['#5599ff', '#ffd700', '#ffeedd']],
   lunar_new_year:   [['#ff0000', '#ffd700', '#ff6600'], ['#ee0000', '#ffcc00', '#ff5500'], ['#ff2200', '#ffd700', '#ff3388']],
+
+  // International
+  mardi_gras:       [['#ffd700', '#9900ff', '#00cc00'], ['#ffcc00', '#aa00ff', '#00ee44'], ['#ffd700', '#cc00ff', '#00ff66']],
+  intl_womens_day:  [['#cc00ff', '#ff69b4', '#ffeedd'], ['#ff00cc', '#ff88cc', '#ffeedd']],
+  holi:             [['#ff0066', '#ffcc00', '#00ccff', '#88ff00', '#ff6600', '#cc00ff']],
+  earth_day:        [['#00cc00', '#0088ff', '#00ff88'], ['#22dd22', '#4488ff', '#44ffaa']],
+  cinco_de_mayo:    [['#00cc00', '#ffffff', '#ff0000'], ['#22ee44', '#ffeedd', '#ff2200']],
+  bastille_day:     [['#0055ff', '#ffffff', '#ff0000'], ['#3377ff', '#ffeedd', '#ff3333']],
+  oktoberfest:      [['#0088ff', '#ffffff', '#ffd700'], ['#4499ff', '#ffeedd', '#ffcc00']],
+  day_of_the_dead:  [['#ff6600', '#ff00ff', '#ffcc00', '#00ffcc'], ['#ff5500', '#cc00ff', '#ffd700']],
+  guy_fawkes:       [['#ff4400', '#ff8800', '#ffd700'], ['#ff6600', '#ffaa00', '#ffee44']],
+  kwanzaa:          [['#ff0000', '#00cc00', '#ffeedd'], ['#ee0000', '#22dd22', '#ffd700']],
+
+  // Fun
+  pi_day:           [['#4488ff', '#ffcc00', '#ff4488'], ['#5599ff', '#ffdd44', '#ff5599']],
+  april_fools:      [['#ff00ff', '#00ffff', '#ffff00'], ['#ff44ff', '#44ffff', '#ffff44']],
+  star_wars_day:    [['#0044ff', '#ff0000', '#00ff00'], ['#0066ff', '#ff2200', '#22ff22']],
+  pride_month:      [['#ff0000', '#ff8800', '#ffff00', '#00cc00', '#0000ff', '#cc00ff']],
+  pirate_day:       [['#ffd700', '#ff0000', '#ffeedd'], ['#ffcc00', '#ff2200', '#ffeedd']],
+  festivus:         [['#c0c0c0', '#808080', '#ffeedd'], ['#aaaaaa', '#666666', '#ffeedd']],
+  new_years_eve:    [['#ffd700', '#ff00ff', '#00ffff', '#ffeedd'], ['#ffcc00', '#ff44ff', '#44ffff']],
+  super_bowl:       [['#ffd700', '#0088ff', '#ff0000'], ['#ffcc00', '#4499ff', '#ff3333']],
+  '420':            [['#00cc00', '#88ff00', '#44ff00'], ['#22dd22', '#66ff00', '#00ff44']],
+
+  // Seasonal
+  spring_equinox:   [['#00ff88', '#ffcc00', '#ff69b4'], ['#44ffaa', '#ffdd44', '#ff88cc']],
+  summer_solstice:  [['#ffcc00', '#ff6600', '#ff0000'], ['#ffdd44', '#ff7722', '#ff2200']],
+  fall_equinox:     [['#ff6600', '#ff4400', '#ffd700'], ['#ff7722', '#ff5500', '#ffcc00']],
+  winter_solstice:  [['#88bbff', '#ffeedd', '#aaddff'], ['#6699ff', '#ffeedd', '#88ccff']],
 };
 
 /**
@@ -100,6 +129,34 @@ export function suggestPalettes(slug, name = '') {
     return HOLIDAY_PALETTES.thanksgiving;
   if (lower.includes('lunar') || lower.includes('chinese'))
     return HOLIDAY_PALETTES.lunar_new_year;
+  if (lower.includes('mardi gras') || lower.includes('carnival'))
+    return HOLIDAY_PALETTES.mardi_gras;
+  if (lower.includes('holi'))
+    return HOLIDAY_PALETTES.holi;
+  if (lower.includes('earth'))
+    return HOLIDAY_PALETTES.earth_day;
+  if (lower.includes('cinco') || lower.includes('mexico'))
+    return HOLIDAY_PALETTES.cinco_de_mayo;
+  if (lower.includes('oktoberfest') || lower.includes('beer'))
+    return HOLIDAY_PALETTES.oktoberfest;
+  if (lower.includes('dead') || lower.includes('muerto'))
+    return HOLIDAY_PALETTES.day_of_the_dead;
+  if (lower.includes('star wars') || lower.includes('may the'))
+    return HOLIDAY_PALETTES.star_wars_day;
+  if (lower.includes('pride') || lower.includes('rainbow') || lower.includes('lgbtq'))
+    return HOLIDAY_PALETTES.pride_month;
+  if (lower.includes('pirate'))
+    return HOLIDAY_PALETTES.pirate_day;
+  if (lower.includes('solstice') && lower.includes('summer'))
+    return HOLIDAY_PALETTES.summer_solstice;
+  if (lower.includes('solstice') && lower.includes('winter'))
+    return HOLIDAY_PALETTES.winter_solstice;
+  if (lower.includes('equinox') && lower.includes('spring'))
+    return HOLIDAY_PALETTES.spring_equinox;
+  if (lower.includes('equinox') && lower.includes('fall'))
+    return HOLIDAY_PALETTES.fall_equinox;
+  if (lower.includes('kwanzaa'))
+    return HOLIDAY_PALETTES.kwanzaa;
 
   // Fall back to random vibrant palettes
   return [randomPalette(3), randomPalette(4), randomPalette(3)];

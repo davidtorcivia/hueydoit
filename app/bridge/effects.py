@@ -46,12 +46,39 @@ def xy_to_hex(x: float, y: float, brightness: float = 1.0) -> str:
     return "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
 
 
+def is_ct(color: str) -> bool:
+    """Check if a color string is a color temperature value (e.g., 'ct:370')."""
+    return isinstance(color, str) and color.startswith("ct:")
+
+
+def ct_to_mirek(color: str) -> int:
+    """Extract mirek value from a ct: color string."""
+    return int(color.split(":")[1])
+
+
 def _brightness_to_dimming(brightness: int) -> dict:
     return {"brightness": max(1.0, min(100.0, float(brightness)))}
 
 
 def _transition_to_dynamics(transition_ms: int) -> dict:
     return {"duration": transition_ms}
+
+
+def _apply_color(cmd: dict, color: str):
+    """Apply a color (hex or ct:mirek) to a light command dict."""
+    if is_ct(color):
+        cmd["color_temperature"] = {"mirek": ct_to_mirek(color)}
+    else:
+        x, y = hex_to_xy(color)
+        cmd["color"] = {"xy": {"x": x, "y": y}}
+
+
+def _color_to_palette_entry(color: str) -> dict:
+    """Convert a color to a palette/gradient entry dict."""
+    if is_ct(color):
+        return {"color_temperature": {"mirek": ct_to_mirek(color)}}
+    x, y = hex_to_xy(color)
+    return {"color": {"xy": {"x": x, "y": y}}}
 
 
 def build_light_command(effect_config: dict, target_type: str) -> dict:
@@ -74,43 +101,36 @@ def build_light_command(effect_config: dict, target_type: str) -> dict:
 
     if mode == "static":
         if colors:
-            x, y = hex_to_xy(colors[0])
-            cmd["color"] = {"xy": {"x": x, "y": y}}
+            _apply_color(cmd, colors[0])
 
     elif mode == "breathe":
+        # Set color only; the continuous pulse is handled by the scheduler's breathe loop
         if colors:
-            x, y = hex_to_xy(colors[0])
-            cmd["color"] = {"xy": {"x": x, "y": y}}
-        cmd["alert"] = {"action": "breathe"}
+            _apply_color(cmd, colors[0])
 
     elif mode == "cycle":
         if len(colors) >= 2:
             palette_colors = []
             for c in colors:
-                x, y = hex_to_xy(c)
-                palette_colors.append({"color": {"xy": {"x": x, "y": y}}})
+                palette_colors.append(_color_to_palette_entry(c))
 
             cycle_interval = effect_config.get("cycle_interval", 30)
             cmd["dynamics"] = {"duration": cycle_interval * 1000}
-            cmd["color"] = {"xy": {"x": palette_colors[0]["color"]["xy"]["x"],
-                                   "y": palette_colors[0]["color"]["xy"]["y"]}}
+            _apply_color(cmd, colors[0])
 
             if target_type == "grouped_light":
                 cmd["dynamics"]["palette"] = palette_colors
         elif colors:
-            x, y = hex_to_xy(colors[0])
-            cmd["color"] = {"xy": {"x": x, "y": y}}
+            _apply_color(cmd, colors[0])
 
     elif mode == "gradient":
         if target_type == "grouped_light" and colors:
             gradient_points = []
             for c in colors:
-                x, y = hex_to_xy(c)
-                gradient_points.append({"color": {"xy": {"x": x, "y": y}}})
+                gradient_points.append(_color_to_palette_entry(c))
             cmd["gradient"] = {"points": gradient_points, "mode": "interpolated_palette"}
         elif colors:
-            x, y = hex_to_xy(colors[0])
-            cmd["color"] = {"xy": {"x": x, "y": y}}
+            _apply_color(cmd, colors[0])
 
     return cmd
 
@@ -119,16 +139,30 @@ def build_individual_gradient_commands(colors: list[str], light_count: int, brig
     if not colors or light_count == 0:
         return []
 
+    # Filter to only hex colors for interpolation; ct: colors can't be interpolated in RGB space
+    hex_colors = [c for c in colors if not is_ct(c)]
+    if not hex_colors:
+        # All color temperature — just spread them evenly
+        commands = []
+        for i in range(light_count):
+            idx = min(int(i / max(1, light_count - 1) * (len(colors) - 1)), len(colors) - 1)
+            cmd: dict = {"on": {"on": True}}
+            _apply_color(cmd, colors[idx])
+            if brightness is not None:
+                cmd["dimming"] = _brightness_to_dimming(brightness)
+            commands.append(cmd)
+        return commands
+
     commands = []
     for i in range(light_count):
         t = i / max(1, light_count - 1)
-        color_idx = t * (len(colors) - 1)
+        color_idx = t * (len(hex_colors) - 1)
         lower = int(math.floor(color_idx))
-        upper = min(lower + 1, len(colors) - 1)
+        upper = min(lower + 1, len(hex_colors) - 1)
         frac = color_idx - lower
 
-        c1 = colors[lower].lstrip("#")
-        c2 = colors[upper].lstrip("#")
+        c1 = hex_colors[lower].lstrip("#")
+        c2 = hex_colors[upper].lstrip("#")
         r = int(int(c1[0:2], 16) * (1 - frac) + int(c2[0:2], 16) * frac)
         g = int(int(c1[2:4], 16) * (1 - frac) + int(c2[2:4], 16) * frac)
         b = int(int(c1[4:6], 16) * (1 - frac) + int(c2[4:6], 16) * frac)

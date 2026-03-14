@@ -1,5 +1,6 @@
 <script>
   import Sidebar from './components/Sidebar.svelte';
+  import Toast from './components/Toast.svelte';
   import Setup from './pages/Setup.svelte';
   import Dashboard from './pages/Dashboard.svelte';
   import Rules from './pages/Rules.svelte';
@@ -13,6 +14,7 @@
   let currentPage = $state('dashboard');
   let bridgeConnected = $state(false);
   let wsConnected = $state(false);
+  let setupComplete = $state(false);
 
   $effect(() => {
     connectWS();
@@ -36,6 +38,12 @@
       bridgeConnected = status.connected;
       if (!status.paired) {
         currentPage = 'setup';
+        return;
+      }
+      const lights = await api.getLights();
+      setupComplete = lights.length > 0;
+      if (!setupComplete) {
+        currentPage = 'setup';
       }
     } catch {
       bridgeConnected = false;
@@ -48,7 +56,8 @@
   }
 </script>
 
-<Sidebar {currentPage} onNavigate={navigate} {bridgeConnected} />
+<Toast />
+<Sidebar {currentPage} onNavigate={navigate} {bridgeConnected} {setupComplete} />
 
 <main class="page">
   {#if currentPage === 'setup'}

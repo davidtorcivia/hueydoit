@@ -8,8 +8,22 @@
   let overrideBrightness = $state(100);
   let overrideMinutes = $state(30);
 
+  function resolveColor(c) {
+    if (!c) return '#888888';
+    if (c.startsWith('ct:')) {
+      // Approximate warm-to-cool display
+      const mirek = parseInt(c.replace('ct:', ''));
+      const t = (mirek - 153) / (500 - 153);
+      const r = Math.round(255 * (0.8 + 0.2 * t));
+      const g = Math.round(255 * (0.7 + 0.15 * t - 0.15 * t * t));
+      const b = Math.round(255 * (0.5 + 0.5 * (1 - t)));
+      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+    }
+    return c;
+  }
+
   let displayColor = $derived(
-    light.state?.color_hex || light.override?.color || '#888888'
+    resolveColor(light.state?.color_hex || light.override?.color)
   );
   let isOn = $derived(
     light.state?.on ?? light.override?.on_state ?? false
@@ -20,6 +34,16 @@
   let colorLabel = $derived(
     light.state?.color_hex || light.override?.color || null
   );
+  let expiresLabel = $derived.by(() => {
+    const ea = light.override?.expires_at;
+    if (!ea) return '';
+    const diff = new Date(ea) - Date.now();
+    if (diff <= 0) return 'expired';
+    const mins = Math.ceil(diff / 60000);
+    if (mins < 60) return `${mins}m left`;
+    const hrs = Math.floor(mins / 60);
+    return `${hrs}h ${mins % 60}m left`;
+  });
 
   async function flash() {
     try {
@@ -74,6 +98,9 @@
   {#if light.override}
     <div class="override-info">
       <span class="badge warning">Override ({light.override.source})</span>
+      {#if light.override.expires_at}
+        <span class="override-expires">{expiresLabel}</span>
+      {/if}
       <button class="small secondary" onclick={() => onClearOverride(light.name)}>Clear</button>
     </div>
   {/if}
@@ -139,6 +166,7 @@
   .active-rule, .override-info {
     display: flex; align-items: center; gap: 8px; font-size: 13px;
   }
+  .override-expires { font-size: 12px; color: var(--text-muted); }
   .light-actions { display: flex; gap: 6px; }
   .override-form {
     padding: 12px; background: var(--bg-input);

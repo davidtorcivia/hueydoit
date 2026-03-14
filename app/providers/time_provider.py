@@ -24,10 +24,9 @@ class TimeProvider(Provider):
         }
 
     def schedule(self) -> ScheduleConfig:
-        # Time is computed fresh inline by the evaluator before each evaluation.
-        # This schedule exists only as a fallback — runs once per hour to keep
-        # the provider_config row updated, but is NOT the primary time source.
-        return ScheduleConfig(type="interval", kwargs={"seconds": 3600})
+        # Time transitions are computed and scheduled precisely by the engine
+        # scheduler — no polling needed.
+        return ScheduleConfig(type="none")
 
     def ttl(self) -> timedelta:
         return timedelta(days=365)

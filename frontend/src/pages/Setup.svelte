@@ -1,5 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
+  import { toast } from '../lib/toast.js';
 
   let step = $state(1);
   let bridgeStatus = $state(null);
@@ -47,7 +48,7 @@
       bridgeLights = result.lights || [];
       bridgeGroups = result.groups || [];
     } catch (e) {
-      alert('Discovery failed: ' + e.message);
+      toast.error('Discovery failed: ' + e.message);
     }
     discovering = false;
   }
@@ -64,7 +65,7 @@
       addedTargets = [...addedTargets, name];
       addingName = '';
     } catch (e) {
-      alert('Add failed: ' + e.message);
+      toast.error('Add failed: ' + e.message);
     }
   }
 

@@ -5,11 +5,12 @@
   let loading = $state(true);
   let levelFilter = $state('');
   let sourceFilter = $state('');
-  let autoScroll = $state(true);
   let page = $state(0);
-  let hasMore = $state(true);
+  let total = $state(0);
 
   const PAGE_SIZE = 100;
+  let totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+  let hasMore = $derived(page < totalPages - 1);
 
   $effect(() => {
     loadLogs();
@@ -22,8 +23,8 @@
       if (levelFilter) params.level = levelFilter;
       if (sourceFilter) params.source = sourceFilter;
       const result = await api.getLogs(params);
-      logs = result;
-      hasMore = result.length === PAGE_SIZE;
+      logs = result.items || result;
+      total = result.total ?? logs.length;
     } catch (e) {
       console.error('Failed to load logs:', e);
     }
@@ -108,7 +109,7 @@
 
   <div class="flex justify-between items-center mt-4">
     <button class="secondary small" onclick={prevPage} disabled={page === 0}>Previous</button>
-    <span style="font-size: 13px; color: var(--text-muted);">Page {page + 1}</span>
+    <span style="font-size: 13px; color: var(--text-muted);">Page {page + 1} of {totalPages} ({total} total)</span>
     <button class="secondary small" onclick={nextPage} disabled={!hasMore}>Next</button>
   </div>
 {/if}

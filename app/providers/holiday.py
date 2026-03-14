@@ -29,6 +29,7 @@ class HolidayProvider(Provider):
                     "slug": h.slug,
                     "colors": h.colors,
                     "category": h.category,
+                    "priority": h.priority,
                 })
             else:
                 h_date = h.date
@@ -47,6 +48,9 @@ class HolidayProvider(Provider):
                     })
 
         upcoming.sort(key=lambda x: x["days_until"])
+
+        # Sort active by priority (lower = higher priority), already pre-sorted from loader
+        active.sort(key=lambda x: x.get("priority", 50))
 
         # Collect colors from the highest-priority active holiday
         active_colors = active[0]["colors"] if active else []

@@ -6,8 +6,21 @@ from datetime import date, timedelta
 from app.database import get_db
 from app.holidays.us_federal import get_us_federal_holidays
 from app.holidays.cultural import get_cultural_holidays
+from app.holidays.international import get_international_holidays
+from app.holidays.fun import get_fun_holidays
+from app.holidays.seasonal import get_seasonal_holidays
 
 logger = logging.getLogger(__name__)
+
+
+CATEGORY_DEFAULT_PRIORITY = {
+    "us_federal": 10,
+    "cultural": 20,
+    "international": 30,
+    "fun": 40,
+    "seasonal": 50,
+    "custom": 15,
+}
 
 
 @dataclass
@@ -21,6 +34,7 @@ class Holiday:
     category: str = "custom"
     recurring: bool = True
     enabled: bool = True
+    priority: int = 50
 
 
 def is_holiday_active(holiday: Holiday, check_date: date) -> bool:
@@ -42,7 +56,7 @@ async def load_all_holidays(year: int) -> list[Holiday]:
     # Load user overrides for built-in holiday colors/enabled/window
     overrides: dict[str, dict] = {}
     async with get_db() as db:
-        cursor = await db.execute("SELECT slug, colors, enabled, window_before_days, window_after_days FROM holiday_config")
+        cursor = await db.execute("SELECT slug, colors, enabled, window_before_days, window_after_days, priority FROM holiday_config")
         for row in await cursor.fetchall():
             colors = []
             if row[1]:
@@ -55,6 +69,7 @@ async def load_all_holidays(year: int) -> list[Holiday]:
                 "enabled": bool(row[2]),
                 "window_before_days": row[3],
                 "window_after_days": row[4],
+                "priority": row[5],
             }
 
     def _apply_window_override(h_date, h_ws, h_we, ovr):
@@ -65,35 +80,24 @@ async def load_all_holidays(year: int) -> list[Holiday]:
         we = h_date + timedelta(days=after) if after is not None else h_we
         return ws, we
 
-    for h in get_us_federal_holidays(year):
-        slug = h["slug"]
-        ovr = overrides.get(slug, {})
-        ws, we = _apply_window_override(h["date"], h["window_start"], h["window_end"], ovr)
-        holidays.append(Holiday(
-            name=h["name"],
-            slug=slug,
-            date=h["date"],
-            window_start=ws,
-            window_end=we,
-            colors=ovr.get("colors") or h["colors"],
-            category=h["category"],
-            enabled=ovr.get("enabled", True),
-        ))
-
-    for h in get_cultural_holidays(year):
-        slug = h["slug"]
-        ovr = overrides.get(slug, {})
-        ws, we = _apply_window_override(h["date"], h["window_start"], h["window_end"], ovr)
-        holidays.append(Holiday(
-            name=h["name"],
-            slug=slug,
-            date=h["date"],
-            window_start=ws,
-            window_end=we,
-            colors=ovr.get("colors") or h["colors"],
-            category=h["category"],
-            enabled=ovr.get("enabled", True),
-        ))
+    all_sources = [get_us_federal_holidays, get_cultural_holidays, get_international_holidays, get_fun_holidays, get_seasonal_holidays]
+    for source in all_sources:
+        for h in source(year):
+            slug = h["slug"]
+            cat = h["category"]
+            ovr = overrides.get(slug, {})
+            ws, we = _apply_window_override(h["date"], h["window_start"], h["window_end"], ovr)
+            holidays.append(Holiday(
+                name=h["name"],
+                slug=slug,
+                date=h["date"],
+                window_start=ws,
+                window_end=we,
+                colors=ovr.get("colors") or h["colors"],
+                category=cat,
+                enabled=ovr.get("enabled", True),
+                priority=ovr.get("priority") or CATEGORY_DEFAULT_PRIORITY.get(cat, 50),
+            ))
 
     async with get_db() as db:
         cursor = await db.execute(
@@ -114,6 +118,7 @@ async def load_all_holidays(year: int) -> list[Holiday]:
 
             slug = row[1].lower().replace(" ", "_").replace("'", "")
 
+            cat = row[6] or "custom"
             holidays.append(Holiday(
                 name=row[1],
                 slug=slug,
@@ -121,9 +126,13 @@ async def load_all_holidays(year: int) -> list[Holiday]:
                 window_start=ws,
                 window_end=we,
                 colors=colors,
-                category=row[6] or "custom",
+                category=cat,
                 recurring=bool(row[5]),
                 enabled=bool(row[8]),
+                priority=CATEGORY_DEFAULT_PRIORITY.get(cat, 15),
             ))
+
+    # Sort by priority (lower = higher priority)
+    holidays.sort(key=lambda h: h.priority)
 
     return holidays

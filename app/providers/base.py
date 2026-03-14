@@ -5,7 +5,7 @@ from datetime import timedelta
 
 @dataclass
 class ScheduleConfig:
-    type: str  # "cron" or "interval"
+    type: str  # "cron", "interval", or "none"
     kwargs: dict = field(default_factory=dict)
 
 

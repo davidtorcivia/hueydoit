@@ -92,7 +92,11 @@ class SSEListener:
                 new_state["on"] = event_data.on.on
             if hasattr(event_data, "dimming") and event_data.dimming:
                 new_state["brightness"] = event_data.dimming.brightness
-            if hasattr(event_data, "color") and event_data.color and event_data.color.xy:
+            if hasattr(event_data, "color_temperature") and event_data.color_temperature and hasattr(event_data.color_temperature, "mirek") and event_data.color_temperature.mirek:
+                mirek = event_data.color_temperature.mirek
+                new_state["color_temp"] = mirek
+                new_state["color_hex"] = f"ct:{mirek}"
+            elif hasattr(event_data, "color") and event_data.color and event_data.color.xy:
                 from app.bridge.effects import xy_to_hex
                 new_state["color_xy"] = {"x": event_data.color.xy.x, "y": event_data.color.xy.y}
                 new_state["color_hex"] = xy_to_hex(

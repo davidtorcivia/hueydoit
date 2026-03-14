@@ -1,182 +1,158 @@
 <script>
   import { api } from '../lib/api.js';
+  import SingleCondition from './SingleCondition.svelte';
 
   let { condition = {}, onChange } = $props();
 
-  // Parse initial condition
   let condAlways = $state(condition?.match === 'always');
-  let provider = $state(condition?.provider || '');
-  let preset = $state('');
+  let innerOp = $state('all'); // operator WITHIN groups
+  let groups = $state([]);       // array of arrays of conditions
+  let groupKeys = $state([]);    // parallel arrays of keys for Svelte keying
+  let groupIdKeys = $state([]);  // unique key per group
+  let nextKey = $state(0);
   let showAdvanced = $state(false);
   let advancedJson = $state('');
 
-  // Preset-specific values
-  let holidayMode = $state('any'); // 'any' | 'specific'
-  let selectedHoliday = $state('');
+  let outerOp = $derived(innerOp === 'all' ? 'any' : 'all');
+  let outerLabel = $derived(innerOp === 'all' ? 'OR' : 'AND');
+  let innerLabel = $derived(innerOp === 'all' ? 'AND' : 'OR');
 
-  let weatherPreset = $state('temp_above'); // temp_above, temp_below, condition_is, humidity_above, humidity_below
-  let weatherValue = $state('');
-  let weatherCondition = $state('Clear');
-
-  let solarPreset = $state('daytime'); // daytime, after_sunset, before_sunrise
-
-  let timePreset = $state('during_hours'); // during_hours, weekends, weekdays, specific_day
-  let timeStart = $state(18);
-  let timeEnd = $state(23);
-  let timeDay = $state('monday');
-
-  let webhookKey = $state('');
-  let webhookValue = $state('');
-
-  // Holiday list for dropdown
   let holidays = $state([]);
-
   $effect(() => {
     api.getHolidays().then(h => holidays = h).catch(() => {});
   });
 
-  // Parse existing condition into preset state on mount
-  $effect(() => {
-    if (!condition || condition.match === 'always') return;
-    const p = condition.provider;
-    const m = condition.match;
-    if (!p || !m || typeof m !== 'object') return;
+  // Parse initial condition
+  function parseConditions(cond) {
+    if (!cond || cond.match === 'always') return;
 
-    if (p === 'holiday') {
-      if (m.active_holiday && typeof m.active_holiday === 'object' && 'gt' in m.active_holiday) {
-        holidayMode = 'any';
-        preset = 'holiday_any';
-      } else if (m.active_holiday) {
-        holidayMode = 'specific';
-        selectedHoliday = String(m.active_holiday);
-        preset = 'holiday_specific';
-      }
-    } else if (p === 'weather') {
-      if (m.temp_f) {
-        if (typeof m.temp_f === 'object') {
-          if ('gt' in m.temp_f || 'gte' in m.temp_f) {
-            weatherPreset = 'temp_above';
-            weatherValue = String(m.temp_f.gt ?? m.temp_f.gte ?? '');
-            preset = 'weather_temp_above';
-          } else {
-            weatherPreset = 'temp_below';
-            weatherValue = String(m.temp_f.lt ?? m.temp_f.lte ?? '');
-            preset = 'weather_temp_below';
-          }
-        }
-      } else if (m.condition) {
-        weatherPreset = 'condition_is';
-        weatherCondition = String(m.condition);
-        preset = 'weather_condition';
-      } else if (m.humidity) {
-        if (typeof m.humidity === 'object') {
-          if ('gt' in m.humidity || 'gte' in m.humidity) {
-            weatherPreset = 'humidity_above';
-            weatherValue = String(m.humidity.gt ?? m.humidity.gte ?? '');
-            preset = 'weather_humidity_above';
-          } else {
-            weatherPreset = 'humidity_below';
-            weatherValue = String(m.humidity.lt ?? m.humidity.lte ?? '');
-            preset = 'weather_humidity_below';
-          }
+    // Nested: any_of containing all_of groups (or vice versa)
+    if (cond.any_of && cond.any_of.some(c => c.all_of)) {
+      innerOp = 'all';
+      for (const sub of cond.any_of) {
+        if (sub.all_of) {
+          addGroupWith(sub.all_of);
+        } else {
+          addGroupWith([sub]);
         }
       }
-    } else if (p === 'solar') {
-      if (m.period === 'day') { solarPreset = 'daytime'; preset = 'solar_daytime'; }
-      else if (m.period === 'night') { solarPreset = 'after_sunset'; preset = 'solar_after_sunset'; }
-      else if (m.period) { solarPreset = m.period; preset = 'solar_' + m.period; }
-    } else if (p === 'time') {
-      if (m.is_weekend === true) { timePreset = 'weekends'; preset = 'time_weekends'; }
-      else if (m.is_weekend === false) { timePreset = 'weekdays'; preset = 'time_weekdays'; }
-      else if (m.day_of_week) { timePreset = 'specific_day'; timeDay = String(m.day_of_week); preset = 'time_specific_day'; }
-      else if (m.hour) {
-        timePreset = 'during_hours';
-        if (typeof m.hour === 'object') {
-          timeStart = m.hour.gte ?? m.hour.gt ?? 18;
-        }
-        preset = 'time_during_hours';
-      }
-    } else if (p === 'webhook') {
-      const keys = Object.keys(m);
-      if (keys.length > 0) {
-        webhookKey = keys[0];
-        webhookValue = String(m[keys[0]]);
-      }
-      preset = 'webhook';
+      return;
     }
-  });
+    if (cond.all_of && cond.all_of.some(c => c.any_of)) {
+      innerOp = 'any';
+      for (const sub of cond.all_of) {
+        if (sub.any_of) {
+          addGroupWith(sub.any_of);
+        } else {
+          addGroupWith([sub]);
+        }
+      }
+      return;
+    }
+
+    // Flat all_of / any_of → single group
+    if (cond.all_of) {
+      innerOp = 'all';
+      addGroupWith(cond.all_of);
+      return;
+    }
+    if (cond.any_of) {
+      innerOp = 'any';
+      addGroupWith(cond.any_of);
+      return;
+    }
+
+    // Single condition
+    if (cond.provider) {
+      addGroupWith([cond]);
+      return;
+    }
+
+    // Default empty
+    addGroupWith([{}]);
+  }
+
+  function addGroupWith(conds) {
+    const gk = conds.map(() => nextKey++);
+    groups = [...groups, [...conds]];
+    groupKeys = [...groupKeys, gk];
+    groupIdKeys = [...groupIdKeys, nextKey++];
+  }
+
+  parseConditions(condition);
+  if (groups.length === 0) addGroupWith([{}]);
+
+  function addConditionToGroup(gi) {
+    groups[gi] = [...groups[gi], {}];
+    groupKeys[gi] = [...groupKeys[gi], nextKey++];
+    groups = [...groups];
+    groupKeys = [...groupKeys];
+  }
+
+  function removeConditionFromGroup(gi, ci) {
+    groups[gi] = groups[gi].filter((_, i) => i !== ci);
+    groupKeys[gi] = groupKeys[gi].filter((_, i) => i !== ci);
+    if (groups[gi].length === 0) {
+      // Remove empty group
+      groups = groups.filter((_, i) => i !== gi);
+      groupKeys = groupKeys.filter((_, i) => i !== gi);
+      groupIdKeys = groupIdKeys.filter((_, i) => i !== gi);
+    }
+    if (groups.length === 0) addGroupWith([{}]);
+    groups = [...groups];
+    groupKeys = [...groupKeys];
+    emitChange();
+  }
+
+  function updateConditionInGroup(gi, ci, newCond) {
+    groups[gi][ci] = newCond;
+    groups = [...groups];
+    emitChange();
+  }
+
+  function addGroup() {
+    addGroupWith([{}]);
+    groups = [...groups];
+    groupKeys = [...groupKeys];
+  }
+
+  function setInnerOp(op) {
+    innerOp = op;
+    emitChange();
+  }
 
   function buildCondition() {
     if (condAlways) return { match: 'always' };
-
     if (showAdvanced) {
-      try {
-        return JSON.parse(advancedJson);
-      } catch {
-        return condition;
-      }
+      try { return JSON.parse(advancedJson); } catch { return condition; }
     }
 
-    if (provider === 'holiday') {
-      if (holidayMode === 'any') {
-        return { provider: 'holiday', match: { active_holiday: { gt: '' } } };
-      } else {
-        return { provider: 'holiday', match: { active_holiday: selectedHoliday } };
-      }
+    // Flatten groups
+    const builtGroups = groups.map(g => g.filter(c => c.provider));
+
+    // Remove empty groups
+    const validGroups = builtGroups.filter(g => g.length > 0);
+    if (validGroups.length === 0) return condition;
+
+    // Single group
+    if (validGroups.length === 1) {
+      const g = validGroups[0];
+      if (g.length === 1) return g[0];
+      return { [`${innerOp}_of`]: g };
     }
 
-    if (provider === 'weather') {
-      switch (weatherPreset) {
-        case 'temp_above':
-          return { provider: 'weather', match: { temp_f: { gte: Number(weatherValue) || 80 } } };
-        case 'temp_below':
-          return { provider: 'weather', match: { temp_f: { lte: Number(weatherValue) || 32 } } };
-        case 'condition_is':
-          return { provider: 'weather', match: { condition: weatherCondition } };
-        case 'humidity_above':
-          return { provider: 'weather', match: { humidity: { gte: Number(weatherValue) || 70 } } };
-        case 'humidity_below':
-          return { provider: 'weather', match: { humidity: { lte: Number(weatherValue) || 30 } } };
-      }
-    }
-
-    if (provider === 'solar') {
-      switch (solarPreset) {
-        case 'daytime':
-          return { provider: 'solar', match: { period: 'day' } };
-        case 'after_sunset':
-          return { provider: 'solar', match: { period: 'night' } };
-        case 'before_sunrise':
-          return { provider: 'solar', match: { period: 'night' } };
-      }
-    }
-
-    if (provider === 'time') {
-      switch (timePreset) {
-        case 'during_hours':
-          return { provider: 'time', match: { hour: { gte: Number(timeStart) } } };
-        case 'weekends':
-          return { provider: 'time', match: { is_weekend: true } };
-        case 'weekdays':
-          return { provider: 'time', match: { is_weekend: false } };
-        case 'specific_day':
-          return { provider: 'time', match: { day_of_week: timeDay } };
-      }
-    }
-
-    if (provider === 'webhook') {
-      return { provider: 'webhook', match: { [webhookKey]: webhookValue } };
-    }
-
-    return condition;
+    // Multiple groups: wrap each group, then combine with outer op
+    const wrapped = validGroups.map(g => {
+      if (g.length === 1) return g[0];
+      return { [`${innerOp}_of`]: g };
+    });
+    return { [`${outerOp}_of`]: wrapped };
   }
 
-  // Emit changes whenever inputs change
   function emitChange() {
     onChange(buildCondition());
   }
 
-  // Sync advanced JSON when toggling
   $effect(() => {
     if (showAdvanced) {
       advancedJson = JSON.stringify(buildCondition(), null, 2);
@@ -192,152 +168,35 @@
   </div>
 
   {#if !condAlways}
-    <div class="form-group">
-      <label>Provider</label>
-      <select bind:value={provider} onchange={() => { preset = ''; emitChange(); }}>
-        <option value="">Select a provider...</option>
-        <option value="holiday">Holiday</option>
-        <option value="weather">Weather</option>
-        <option value="solar">Solar</option>
-        <option value="time">Time</option>
-        <option value="webhook">Webhook</option>
-      </select>
-    </div>
-
-    {#if provider === 'holiday'}
-      <div class="preset-section">
-        <div class="form-group">
-          <label>When</label>
-          <select bind:value={holidayMode} onchange={emitChange}>
-            <option value="any">Any holiday is active</option>
-            <option value="specific">A specific holiday is active</option>
-          </select>
+    {#each groups as group, gi (groupIdKeys[gi])}
+      {#if gi > 0}
+        <div class="group-separator">
+          <span class="group-sep-line"></span>
+          <span class="group-sep-label">{outerLabel}</span>
+          <span class="group-sep-line"></span>
         </div>
-        {#if holidayMode === 'specific'}
-          <div class="form-group">
-            <label>Holiday</label>
-            <select bind:value={selectedHoliday} onchange={emitChange}>
-              <option value="">Select...</option>
-              {#each holidays.filter(h => h.enabled) as h}
-                <option value={h.name}>{h.name}</option>
-              {/each}
-            </select>
-          </div>
-        {/if}
-      </div>
-    {/if}
+      {/if}
 
-    {#if provider === 'weather'}
-      <div class="preset-section">
-        <div class="form-group">
-          <label>When</label>
-          <select bind:value={weatherPreset} onchange={emitChange}>
-            <option value="temp_above">Temperature is above</option>
-            <option value="temp_below">Temperature is below</option>
-            <option value="condition_is">Weather condition is</option>
-            <option value="humidity_above">Humidity is above</option>
-            <option value="humidity_below">Humidity is below</option>
-          </select>
-        </div>
-        {#if weatherPreset === 'condition_is'}
-          <div class="form-group">
-            <label>Condition</label>
-            <select bind:value={weatherCondition} onchange={emitChange}>
-              <option value="Clear">Clear</option>
-              <option value="Clouds">Clouds</option>
-              <option value="Rain">Rain</option>
-              <option value="Snow">Snow</option>
-              <option value="Thunderstorm">Thunderstorm</option>
-              <option value="Drizzle">Drizzle</option>
-              <option value="Mist">Mist</option>
-              <option value="Fog">Fog</option>
-            </select>
-          </div>
-        {:else}
-          <div class="form-group">
-            <label>{weatherPreset.includes('temp') ? 'Temperature (°F)' : 'Humidity (%)'}</label>
-            <input type="number" bind:value={weatherValue} oninput={emitChange}
-              placeholder={weatherPreset.includes('temp') ? '32' : '50'} />
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    {#if provider === 'solar'}
-      <div class="preset-section">
-        <div class="form-group">
-          <label>When</label>
-          <select bind:value={solarPreset} onchange={emitChange}>
-            <option value="daytime">During daytime</option>
-            <option value="after_sunset">After sunset</option>
-            <option value="before_sunrise">Before sunrise</option>
-          </select>
-        </div>
-      </div>
-    {/if}
-
-    {#if provider === 'time'}
-      <div class="preset-section">
-        <div class="form-group">
-          <label>When</label>
-          <select bind:value={timePreset} onchange={emitChange}>
-            <option value="during_hours">During specific hours</option>
-            <option value="weekends">On weekends</option>
-            <option value="weekdays">On weekdays</option>
-            <option value="specific_day">On a specific day</option>
-          </select>
-        </div>
-        {#if timePreset === 'during_hours'}
-          <div class="flex gap-2">
-            <div class="form-group" style="flex:1">
-              <label>Start hour</label>
-              <select bind:value={timeStart} onchange={emitChange}>
-                {#each Array.from({length: 24}, (_, i) => i) as h}
-                  <option value={h}>{h.toString().padStart(2, '0')}:00</option>
-                {/each}
-              </select>
+      <div class="condition-group" class:multi-group={groups.length > 1}>
+        {#each group as cond, ci (groupKeys[gi][ci])}
+          {#if ci > 0}
+            <div class="operator-row">
+              <button class="operator-btn" class:active={innerOp === 'all'} onclick={() => setInnerOp('all')}>AND</button>
+              <button class="operator-btn" class:active={innerOp === 'any'} onclick={() => setInnerOp('any')}>OR</button>
             </div>
-            <div class="form-group" style="flex:1">
-              <label>End hour (display only)</label>
-              <select bind:value={timeEnd} onchange={emitChange}>
-                {#each Array.from({length: 24}, (_, i) => i) as h}
-                  <option value={h}>{h.toString().padStart(2, '0')}:00</option>
-                {/each}
-              </select>
-            </div>
-          </div>
-        {/if}
-        {#if timePreset === 'specific_day'}
-          <div class="form-group">
-            <label>Day</label>
-            <select bind:value={timeDay} onchange={emitChange}>
-              <option value="monday">Monday</option>
-              <option value="tuesday">Tuesday</option>
-              <option value="wednesday">Wednesday</option>
-              <option value="thursday">Thursday</option>
-              <option value="friday">Friday</option>
-              <option value="saturday">Saturday</option>
-              <option value="sunday">Sunday</option>
-            </select>
-          </div>
-        {/if}
+          {/if}
+          <SingleCondition
+            condition={cond}
+            {holidays}
+            onChange={(c) => updateConditionInGroup(gi, ci, c)}
+            onRemove={(group.length > 1 || groups.length > 1) ? () => removeConditionFromGroup(gi, ci) : null}
+          />
+        {/each}
+        <button class="add-condition-btn" onclick={() => addConditionToGroup(gi)}>+ Add Condition</button>
       </div>
-    {/if}
+    {/each}
 
-    {#if provider === 'webhook'}
-      <div class="preset-section">
-        <div class="flex gap-2">
-          <div class="form-group" style="flex:1">
-            <label>Key</label>
-            <input type="text" bind:value={webhookKey} oninput={emitChange} placeholder="e.g. motion_detected" />
-          </div>
-          <div class="form-group" style="flex:1">
-            <label>Value</label>
-            <input type="text" bind:value={webhookValue} oninput={emitChange} placeholder="e.g. true" />
-          </div>
-        </div>
-      </div>
-    {/if}
+    <button class="add-group-btn" onclick={addGroup}>+ Add Group</button>
 
     <div class="advanced-toggle">
       <label>
@@ -360,26 +219,69 @@
 
 <style>
   .condition-builder { display: flex; flex-direction: column; gap: 4px; }
-  .preset-section {
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: var(--radius);
+  .condition-group { display: flex; flex-direction: column; gap: 0; }
+  .condition-group.multi-group {
+    padding: 10px;
     border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .group-separator {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0;
+  }
+  .group-sep-line { flex: 1; height: 1px; background: var(--border-light); }
+  .group-sep-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    color: var(--accent); padding: 2px 10px;
+    border: 1px solid var(--accent); border-radius: 4px;
+    background: rgba(79, 134, 247, 0.1);
+  }
+  .operator-row {
+    display: flex; justify-content: center; gap: 2px; padding: 6px 0;
+  }
+  .operator-btn {
+    padding: 3px 14px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.5px; background: var(--bg-input);
+    color: var(--text-muted); border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .operator-btn:first-child { border-radius: 4px 0 0 4px; }
+  .operator-btn:last-child { border-radius: 0 4px 4px 0; }
+  .operator-btn.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .add-condition-btn {
+    align-self: flex-start; margin-top: 6px;
+    padding: 5px 14px; font-size: 13px;
+    background: transparent; color: var(--accent);
+    border: 1px dashed var(--border); border-radius: var(--radius);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .add-condition-btn:hover {
+    border-color: var(--accent); background: rgba(79, 134, 247, 0.1);
+  }
+  .add-group-btn {
+    align-self: flex-start; margin-top: 8px;
+    padding: 5px 14px; font-size: 13px;
+    background: transparent; color: var(--text-secondary);
+    border: 1px dashed var(--border-light); border-radius: var(--radius);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .add-group-btn:hover {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(79, 134, 247, 0.05);
   }
   .advanced-toggle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-top: 4px;
+    font-size: 13px; color: var(--text-secondary); margin-top: 4px;
+  }
+  .advanced-toggle label {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
   }
   .json-editor {
-    font-family: monospace;
-    font-size: 13px;
-    width: 100%;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 8px;
-    resize: vertical;
+    font-family: monospace; font-size: 13px; width: 100%;
+    background: var(--bg-input); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px; resize: vertical;
   }
 </style>

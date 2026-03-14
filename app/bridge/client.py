@@ -146,6 +146,9 @@ class HueBridgeClient:
                 color_xy = (xy.get("x", 0), xy.get("y", 0))
             elif isinstance(xy, (list, tuple)) and len(xy) == 2:
                 color_xy = tuple(xy)
+        color_temp = None
+        if isinstance(state.get("color_temperature"), dict):
+            color_temp = state["color_temperature"].get("mirek")
         transition = None
         if isinstance(state.get("dynamics"), dict):
             duration = state["dynamics"].get("duration")
@@ -156,28 +159,12 @@ class HueBridgeClient:
             if resource_type == "light":
                 light = self._find_light(hue_id)
                 if light:
-                    kwargs = {}
-                    if on_val is not None:
-                        kwargs["on"] = on_val
-                    if brightness is not None:
-                        kwargs["brightness"] = brightness
-                    if color_xy is not None:
-                        kwargs["color_xy"] = color_xy
-                    if transition is not None:
-                        kwargs["transition_time"] = transition
+                    kwargs = self._build_kwargs(on_val, brightness, color_xy, color_temp, transition)
                     await self._bridge.lights.set_state(light.id, **kwargs)
             elif resource_type == "grouped_light":
                 gl = self._find_grouped_light(hue_id)
                 if gl:
-                    kwargs = {}
-                    if on_val is not None:
-                        kwargs["on"] = on_val
-                    if brightness is not None:
-                        kwargs["brightness"] = brightness
-                    if color_xy is not None:
-                        kwargs["color_xy"] = color_xy
-                    if transition is not None:
-                        kwargs["transition_time"] = transition
+                    kwargs = self._build_kwargs(on_val, brightness, color_xy, color_temp, transition)
                     await self._bridge.groups.grouped_light.set_state(gl.id, **kwargs)
             logger.debug("Set %s %s state: %s", resource_type, hue_id, state)
         except Exception as e:
@@ -210,6 +197,21 @@ class HueBridgeClient:
                 await self._bridge.lights.set_flash(light.id, short=True)
             except Exception as e:
                 logger.error("Failed to identify light %s: %s", hue_id, e)
+
+    @staticmethod
+    def _build_kwargs(on_val, brightness, color_xy, color_temp, transition):
+        kwargs = {}
+        if on_val is not None:
+            kwargs["on"] = on_val
+        if brightness is not None:
+            kwargs["brightness"] = brightness
+        if color_temp is not None:
+            kwargs["color_temp"] = color_temp
+        elif color_xy is not None:
+            kwargs["color_xy"] = color_xy
+        if transition is not None:
+            kwargs["transition_time"] = transition
+        return kwargs
 
     def _find_light(self, hue_id: str) -> Light | None:
         if not self._bridge:

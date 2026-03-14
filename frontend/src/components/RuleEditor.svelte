@@ -1,6 +1,8 @@
 <script>
   import ColorPicker from './ColorPicker.svelte';
+  import SingleColorPick from './SingleColorPick.svelte';
   import ConditionBuilder from './ConditionBuilder.svelte';
+  import { suggestPalettes } from '../lib/paletteSuggest.js';
 
   let { rule = null, targets = [], onSave, onCancel } = $props();
 
@@ -19,9 +21,19 @@
 
   let selectedTargets = $state(rule?.config?.targets || []);
 
-  // Per-light color assignment
-  let enableColorMap = $state(!!rule?.config?.effect?.color_map);
+  // Per-light color & brightness assignment
+  let enableColorMap = $state(!!rule?.config?.effect?.color_map || !!rule?.config?.effect?.brightness_map);
   let colorMap = $state(rule?.config?.effect?.color_map || {});
+  let brightnessMap = $state(rule?.config?.effect?.brightness_map || {});
+
+  // Sort targets alphabetically for stable display
+  let sortedTargets = $derived(
+    [...targets].sort((a, b) => (a.friendly_name || a.name).localeCompare(b.friendly_name || b.name))
+  );
+  // Keep selected targets in same order as sortedTargets for color map display
+  let orderedSelectedTargets = $derived(
+    sortedTargets.map(t => t.name).filter(name => selectedTargets.includes(name))
+  );
 
   function toggleTarget(t) {
     if (selectedTargets.includes(t)) {
@@ -39,7 +51,39 @@
     colorMap = { ...colorMap, [targetName]: color };
   }
 
-  let isHolidayProvider = $derived(condition?.provider === 'holiday');
+  function updateBrightnessMapEntry(targetName, brightness) {
+    brightnessMap = { ...brightnessMap, [targetName]: Number(brightness) };
+  }
+
+  // Palette suggestions
+  let suggestions = $state([]);
+
+  function showSuggestions() {
+    // Build a keyword from the rule name + any holiday condition
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    suggestions = suggestPalettes(slug, name);
+  }
+
+  function applySuggestion(palette) {
+    effectColors = [...palette];
+    suggestions = [];
+  }
+
+  function distributeColorsToLights() {
+    if (effectColors.length === 0 || orderedSelectedTargets.length === 0) return;
+    const newColorMap = {};
+    for (let i = 0; i < orderedSelectedTargets.length; i++) {
+      const colorIdx = i % effectColors.length;
+      newColorMap[orderedSelectedTargets[i]] = effectColors[colorIdx];
+    }
+    colorMap = newColorMap;
+  }
+
+  let isHolidayProvider = $derived(
+    condition?.provider === 'holiday' ||
+    (condition?.all_of || []).some(c => c?.provider === 'holiday') ||
+    (condition?.any_of || []).some(c => c?.provider === 'holiday')
+  );
 
   function buildConfig() {
     const effect = { mode: effectMode };
@@ -51,13 +95,16 @@
       if (effectTransition > 0) effect.transition = effectTransition;
       if (effectMode === 'cycle') effect.cycle_interval = effectCycleInterval;
       if (useHolidayColors) effect.use_holiday_colors = true;
-      if (enableColorMap && Object.keys(colorMap).length > 0) {
+      if (enableColorMap) {
         // Only include entries for selected targets
-        const filtered = {};
+        const filteredColors = {};
+        const filteredBrightness = {};
         for (const t of selectedTargets) {
-          if (colorMap[t]) filtered[t] = colorMap[t];
+          if (colorMap[t]) filteredColors[t] = colorMap[t];
+          if (brightnessMap[t] !== undefined) filteredBrightness[t] = brightnessMap[t];
         }
-        if (Object.keys(filtered).length > 0) effect.color_map = filtered;
+        if (Object.keys(filteredColors).length > 0) effect.color_map = filteredColors;
+        if (Object.keys(filteredBrightness).length > 0) effect.brightness_map = filteredBrightness;
       }
     }
 
@@ -105,14 +152,16 @@
       </select>
     </div>
 
-    {#if effectMode !== 'off'}
+    {#if effectMode === 'off'}
+      <span class="hint">Lights will be turned off</span>
+    {:else}
       {#if isHolidayProvider}
         <div class="form-group">
           <label>
             <input type="checkbox" bind:checked={useHolidayColors} />
             Use active holiday's colors automatically
           </label>
-          <span class="hint">When enabled, colors come from the currently active holiday</span>
+          <span class="hint">Colors come from the currently active holiday</span>
         </div>
       {/if}
 
@@ -120,6 +169,27 @@
         <div class="form-group">
           <label>Colors</label>
           <ColorPicker colors={effectColors} onChange={(c) => effectColors = c} />
+          <div class="colors-toolbar">
+            <button class="small secondary" onclick={showSuggestions} disabled={!name}>Suggest Palette</button>
+            {#if effectMode === 'static' || effectMode === 'breathe'}
+              <span class="hint">Only the first color is used</span>
+            {:else if effectMode === 'cycle'}
+              <span class="hint">Add 2+ colors to cycle through as a palette</span>
+            {:else if effectMode === 'gradient'}
+              <span class="hint">Add 2+ colors to spread across lights as a gradient</span>
+            {/if}
+          </div>
+          {#if suggestions.length > 0}
+            <div class="palette-suggestions">
+              {#each suggestions as palette, i}
+                <button class="palette-option" onclick={() => applySuggestion(palette)}>
+                  {#each palette as color}
+                    <span class="swatch" style="background: {color};"></span>
+                  {/each}
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -128,15 +198,18 @@
         <input type="range" min="1" max="100" bind:value={effectBrightness} />
       </div>
 
-      <div class="form-group">
-        <label>Transition (ms)</label>
-        <input type="number" bind:value={effectTransition} min="0" max="60000" />
-      </div>
+      {#if effectMode !== 'cycle'}
+        <div class="form-group">
+          <label>Transition (ms)</label>
+          <input type="number" bind:value={effectTransition} min="0" max="60000" />
+        </div>
+      {/if}
 
       {#if effectMode === 'cycle'}
         <div class="form-group">
           <label>Cycle Interval (seconds)</label>
           <input type="number" bind:value={effectCycleInterval} min="1" max="3600" />
+          <span class="hint">Time to transition between colors in the palette</span>
         </div>
       {/if}
     {/if}
@@ -145,7 +218,7 @@
 
     <div class="form-group">
       <div class="target-list">
-        {#each targets as t}
+        {#each sortedTargets as t}
           <label class="target-check">
             <input type="checkbox" checked={selectedTargets.includes(t.name)} onchange={() => toggleTarget(t.name)} />
             {t.friendly_name || t.name}
@@ -167,16 +240,27 @@
 
       {#if enableColorMap}
         <div class="color-map-section">
-          {#each selectedTargets as tName}
+          {#if effectColors.length > 0 && orderedSelectedTargets.length > 0}
+            <button class="small secondary distribute-btn" onclick={distributeColorsToLights}>
+              Distribute palette to lights
+            </button>
+          {/if}
+          {#each orderedSelectedTargets as tName}
             {@const targetInfo = targets.find(t => t.name === tName)}
             <div class="color-map-row">
               <span class="color-map-label">{targetInfo?.friendly_name || tName}</span>
-              <input
-                type="color"
+              <SingleColorPick
                 value={colorMap[tName] || '#ffffff'}
-                oninput={(e) => updateColorMapEntry(tName, e.target.value)}
+                onChange={(c) => updateColorMapEntry(tName, c)}
               />
-              <span class="color-hex">{colorMap[tName] || '#ffffff'}</span>
+              <input
+                type="range"
+                min="1" max="100"
+                value={brightnessMap[tName] ?? effectBrightness}
+                oninput={(e) => updateBrightnessMapEntry(tName, e.target.value)}
+                class="brightness-slider"
+              />
+              <span class="brightness-val">{brightnessMap[tName] ?? effectBrightness}%</span>
             </div>
           {/each}
         </div>
@@ -193,10 +277,16 @@
 <style>
   .rule-modal { max-height: 90vh; overflow-y: auto; }
   .section-title { font-size: 14px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 16px; margin-bottom: 8px; }
-  .target-list { display: flex; flex-direction: column; gap: 4px; }
+  .target-list { display: flex; flex-direction: column; gap: 8px; }
   .target-check {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 10px;
     font-size: 14px; cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    transition: background 0.15s;
+  }
+  .target-check:hover {
+    background: rgba(255, 255, 255, 0.04);
   }
   .target-check input { cursor: pointer; }
   .hint { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
@@ -209,9 +299,23 @@
     display: flex; align-items: center; gap: 10px;
   }
   .color-map-label { flex: 1; font-size: 14px; }
-  .color-map-row input[type="color"] {
-    width: 36px; height: 28px; padding: 1px; cursor: pointer;
-    border: 1px solid var(--border);
+  .brightness-slider { width: 80px; }
+  .brightness-val { font-size: 12px; color: var(--text-muted); width: 36px; text-align: right; }
+  .colors-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .colors-toolbar .hint { margin-top: 0; }
+  .palette-suggestions {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
   }
-  .color-hex { font-size: 12px; color: var(--text-muted); font-family: monospace; width: 64px; }
+  .palette-option {
+    display: flex; gap: 3px; padding: 6px 10px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .palette-option:hover { border-color: var(--accent); }
+  .swatch {
+    display: inline-block; width: 20px; height: 20px;
+    border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .distribute-btn { margin-bottom: 8px; }
 </style>

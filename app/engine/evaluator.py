@@ -62,7 +62,19 @@ class RuleEvaluator:
             "year": now_local.year,
         }
 
+        # Always inject fresh calendar state
+        from app.providers.calendar_provider import CalendarProvider
+        provider_states["calendar"] = CalendarProvider.compute_state(now_local.date())
+
+        # Always inject fresh solar state (period must reflect current time)
+        from app.providers.solar import SolarProvider
+        solar_fresh = SolarProvider.compute_fresh(settings.tz, settings.latitude, settings.longitude)
+        # Merge with existing solar state (preserves dawn/dusk/noon from daily fetch)
+        existing_solar = provider_states.get("solar", {})
+        provider_states["solar"] = {**existing_solar, **solar_fresh}
+
         target_assignments: dict[str, dict] = {}
+        new_breathing: dict[str, dict] = {}  # targets that need continuous breathe
 
         for rule_row in rules:
             rule_id = rule_row[0]
@@ -105,6 +117,7 @@ class RuleEvaluator:
                     "priority": rule_priority,
                     "effect": effect,
                     "condition": condition,
+                    "_targets": rule_targets,
                 }
 
         has_catchall = False
@@ -139,11 +152,24 @@ class RuleEvaluator:
                     active_colors = holiday_state.get("active_colors", [])
                     if active_colors:
                         effect["colors"] = active_colors
+                        # Auto-distribute colors across targets in round-robin
+                        rule_targets = assignment.get("_targets", [])
+                        if len(active_colors) > 1 and len(rule_targets) > 1:
+                            try:
+                                idx = rule_targets.index(target_name)
+                                effect["colors"] = [active_colors[idx % len(active_colors)]]
+                            except ValueError:
+                                pass
 
                 # Per-light color map: override colors for this specific target
                 color_map = effect.pop("color_map", None)
                 if color_map and target_name in color_map:
                     effect["colors"] = [color_map[target_name]]
+
+                # Per-light brightness map
+                brightness_map = effect.pop("brightness_map", None)
+                if brightness_map and target_name in brightness_map:
+                    effect["brightness"] = brightness_map[target_name]
 
                 cmd = build_light_command(effect, target_info["type"])
 
@@ -151,6 +177,14 @@ class RuleEvaluator:
                     await bridge_client.set_light_state(
                         target_info["type"], target_info["hue_id"], cmd
                     )
+
+                if effect.get("mode") == "breathe":
+                    new_breathing[target_name] = {
+                        "type": target_info["type"],
+                        "hue_id": target_info["hue_id"],
+                        "brightness": effect.get("brightness", 80),
+                        "transition": effect.get("transition", 4000),
+                    }
 
                 if prev_id != assignment["rule_id"]:
                     await ws_manager.broadcast(
@@ -172,11 +206,17 @@ class RuleEvaluator:
                         {"on": {"on": False}},
                     )
 
+        state_manager.set_breathing_targets(new_breathing)
         await state_manager.persist_hysteresis()
 
     def _match_condition(self, condition: dict, provider_states: dict) -> bool:
         if condition.get("match") == "always":
             return True
+
+        if "all_of" in condition:
+            return all(
+                self._match_condition(sub, provider_states) for sub in condition["all_of"]
+            )
 
         if "any_of" in condition:
             return any(
@@ -199,6 +239,42 @@ class RuleEvaluator:
 
     def _match_block(self, match: dict, state: dict) -> bool:
         for key, expected in match.items():
+            # Special handling for date_range (MM-DD format, supports year wrap)
+            if key == "date_range" and isinstance(expected, dict):
+                current_date = state.get("date", "")  # YYYY-MM-DD
+                if not current_date:
+                    return False
+                # Extract MM-DD from current date
+                md = current_date[5:]  # "MM-DD"
+                start = expected.get("start", "01-01")
+                end = expected.get("end", "12-31")
+                if start <= end:
+                    if not (start <= md <= end):
+                        return False
+                else:
+                    # Year wrap: e.g. start=11-01, end=02-28
+                    if not (md >= start or md <= end):
+                        return False
+                continue
+
+            # Special handling for hour_range (supports overnight wrap)
+            if key == "hour_range" and isinstance(expected, dict):
+                current_hour = state.get("hour")
+                if current_hour is None:
+                    return False
+                start = expected.get("start", 0)
+                end = expected.get("end", 0)
+                if start == end:
+                    pass  # always matches (24h)
+                elif start < end:
+                    if not (start <= current_hour < end):
+                        return False
+                else:
+                    # Overnight wrap: e.g. start=23, end=3 → 23,0,1,2
+                    if not (current_hour >= start or current_hour < end):
+                        return False
+                continue
+
             value = self._resolve_dot_path(state, key)
             if value is None:
                 return False

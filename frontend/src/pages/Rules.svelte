@@ -2,6 +2,7 @@
   import RuleEditor from '../components/RuleEditor.svelte';
   import RuleTester from '../components/RuleTester.svelte';
   import { api } from '../lib/api.js';
+  import { toast } from '../lib/toast.js';
   import { addWSListener } from '../lib/websocket.js';
   import { ruleTemplates } from '../lib/ruleTemplates.js';
 
@@ -42,6 +43,17 @@
     showEditor = true;
   }
 
+  function cloneRule(rule) {
+    // $state proxies can't be structuredCloned — serialize to plain object
+    const plain = JSON.parse(JSON.stringify(rule));
+    plain.id = undefined;
+    plain.name = plain.name + ' (copy)';
+    // Close and reopen to force full component recreation
+    showEditor = false;
+    editingRule = plain;
+    requestAnimationFrame(() => { showEditor = true; });
+  }
+
   function useTemplate(template) {
     editingRule = { ...structuredClone(template.rule), _isTemplate: true };
     showTemplates = false;
@@ -57,8 +69,9 @@
       }
       showEditor = false;
       await loadData();
+      toast.success('Rule saved');
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     }
   }
 
@@ -69,6 +82,15 @@
       await loadData();
     } catch (e) {
       console.error('Delete failed:', e);
+    }
+  }
+
+  async function handleTrigger(rule) {
+    try {
+      const result = await api.triggerRule(rule.id);
+      toast.success(`Triggered "${rule.name}" on ${result.targets_applied.length} lights`);
+    } catch (e) {
+      toast.error('Trigger failed: ' + e.message);
     }
   }
 
@@ -102,23 +124,78 @@
     }
   }
 
+  function formatHour(h) {
+    if (h === 0) return '12 AM';
+    if (h < 12) return h + ' AM';
+    if (h === 12) return '12 PM';
+    return (h - 12) + ' PM';
+  }
+
+  const dayNames = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+
+  function singleCondSummary(c) {
+    if (c.match === 'always') return 'Always';
+    const p = c.provider;
+    const m = c.match;
+    if (!m || typeof m !== 'object') return p || '?';
+
+    if (p === 'time') {
+      if (m.hour_range) return `${formatHour(m.hour_range.start)} – ${formatHour(m.hour_range.end)}`;
+      if (m.hour && typeof m.hour === 'object') return `After ${formatHour(m.hour.gte ?? m.hour.gt ?? 0)}`;
+      if (m.is_weekend === true) return 'Weekends';
+      if (m.is_weekend === false) return 'Weekdays';
+      if (m.day_of_week) return dayNames[m.day_of_week] || m.day_of_week;
+    }
+    if (p === 'holiday') {
+      if (m.active_holiday && typeof m.active_holiday === 'object') return 'Any holiday';
+      if (m.active_holiday) return `Holiday: ${m.active_holiday}`;
+    }
+    if (p === 'solar') {
+      if (m.period === 'day') return 'Daytime';
+      if (m.phase === 'before_sunrise') return 'Before sunrise';
+      if (m.period === 'night') return 'After sunset';
+      return m.period || m.phase || 'Solar';
+    }
+    if (p === 'weather') {
+      if (m.temp_f) {
+        const op = Object.keys(m.temp_f)[0];
+        return `Temp ${op === 'gte' || op === 'gt' ? '>' : '<'} ${m.temp_f[op]}°F`;
+      }
+      if (m.condition) return `Weather: ${m.condition}`;
+      if (m.humidity) {
+        const op = Object.keys(m.humidity)[0];
+        return `Humidity ${op === 'gte' || op === 'gt' ? '>' : '<'} ${m.humidity[op]}%`;
+      }
+    }
+    if (p === 'calendar') {
+      if (m.season) return m.season.charAt(0).toUpperCase() + m.season.slice(1);
+      const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      if (m.month) return monthNames[m.month] || `Month ${m.month}`;
+      if (m.month_name) return m.month_name.charAt(0).toUpperCase() + m.month_name.slice(1);
+      if (m.date_range) {
+        const s = m.date_range.start, e = m.date_range.end;
+        if (s === '03-20' && e === '06-20') return 'Spring';
+        if (s === '06-21' && e === '09-21') return 'Summer';
+        if (s === '09-22' && e === '12-20') return 'Fall';
+        if (s === '12-21' && e === '03-19') return 'Winter';
+        return `${s} – ${e}`;
+      }
+      return 'Calendar';
+    }
+    if (p === 'webhook') {
+      const k = Object.keys(m)[0];
+      return k ? `Webhook: ${k}=${m[k]}` : 'Webhook';
+    }
+    return p || '?';
+  }
+
   function conditionSummary(config) {
     if (!config?.condition) return '?';
     const c = config.condition;
     if (c.match === 'always') return 'Always';
-    const provider = c.provider || '';
-    const match = c.match;
-    if (typeof match === 'object' && match) {
-      const parts = Object.entries(match).map(([k, v]) => {
-        if (typeof v === 'object' && v) {
-          const op = Object.keys(v)[0];
-          return `${k} ${op} ${v[op]}`;
-        }
-        return `${k} = ${v}`;
-      });
-      return `${provider}: ${parts.join(', ')}`;
-    }
-    return provider || '?';
+    if (c.all_of) return c.all_of.map(singleCondSummary).join(' + ');
+    if (c.any_of) return c.any_of.map(singleCondSummary).join(' | ');
+    return singleCondSummary(c);
   }
 </script>
 
@@ -198,7 +275,9 @@
           </td>
           <td>
             <div class="flex gap-2">
+              <button class="small primary" onclick={() => handleTrigger(rule)}>Run</button>
               <button class="small secondary" onclick={() => openEdit(rule)}>Edit</button>
+              <button class="small secondary" onclick={() => cloneRule(rule)}>Clone</button>
               <button class="small danger" onclick={() => handleDelete(rule.id)}>Del</button>
             </div>
           </td>
@@ -213,12 +292,14 @@
 {/if}
 
 {#if showEditor}
-  <RuleEditor
-    rule={editingRule}
-    {targets}
-    onSave={handleSave}
-    onCancel={() => showEditor = false}
-  />
+  {#key editingRule}
+    <RuleEditor
+      rule={editingRule}
+      {targets}
+      onSave={handleSave}
+      onCancel={() => showEditor = false}
+    />
+  {/key}
 {/if}
 
 <style>
