@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS overrides (
     brightness INTEGER,
     on_state BOOLEAN,
     expires_at TIMESTAMP,
+    overridden_rule_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -104,6 +105,9 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     ]),
     (2, [
         "ALTER TABLE holiday_config ADD COLUMN priority INTEGER",
+    ]),
+    (3, [
+        "ALTER TABLE overrides ADD COLUMN overridden_rule_id INTEGER",
     ]),
 ]
 

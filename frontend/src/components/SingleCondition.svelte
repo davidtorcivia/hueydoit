@@ -10,6 +10,7 @@
   let weatherValue = $state('');
   let weatherCondition = $state('Clear');
   let solarPreset = $state('daytime');
+  let solarOffsetMin = $state(0);
   let timePreset = $state('during_hours');
   let timeStart = $state(18);
   let timeEnd = $state(23);
@@ -64,6 +65,17 @@
       else if (_m.phase === 'after_sunset') solarPreset = 'after_sunset';
       else if (_m.period === 'night') solarPreset = 'after_sunset';
       else if (_m.period) solarPreset = _m.period;
+      // Parse offset from sunrise_offset or sunset_offset
+      const rawOffset = _m.sunrise_offset || _m.sunset_offset || '';
+      if (rawOffset) {
+        const neg = rawOffset.startsWith('-');
+        const abs = rawOffset.replace(/^[+-]/, '');
+        let mins = 0;
+        if (abs.endsWith('h')) mins = parseInt(abs) * 60;
+        else if (abs.endsWith('m')) mins = parseInt(abs);
+        else mins = parseInt(abs);
+        solarOffsetMin = neg ? -mins : mins;
+      }
     } else if (_p === 'time') {
       if (_m.is_weekend === true) timePreset = 'weekends';
       else if (_m.is_weekend === false) timePreset = 'weekdays';
@@ -130,11 +142,26 @@
       }
     }
     if (provider === 'solar') {
+      let match = {};
       switch (solarPreset) {
-        case 'daytime': return { provider: 'solar', match: { period: 'day' } };
-        case 'after_sunset': return { provider: 'solar', match: { period: 'night' } };
-        case 'before_sunrise': return { provider: 'solar', match: { phase: 'before_sunrise' } };
+        case 'daytime': match = { period: 'day' }; break;
+        case 'after_sunset': match = { period: 'night' }; break;
+        case 'before_sunrise': match = { phase: 'before_sunrise' }; break;
       }
+      if (solarOffsetMin !== 0) {
+        const absMin = Math.abs(solarOffsetMin);
+        const sign = solarOffsetMin < 0 ? '-' : '';
+        const offsetStr = absMin >= 60 ? `${sign}${Math.floor(absMin / 60)}h` : `${sign}${absMin}m`;
+        // Offset applies to the event that defines the boundary:
+        // "after sunset" / "daytime" → sunset_offset
+        // "before sunrise" → sunrise_offset
+        if (solarPreset === 'before_sunrise') {
+          match.sunrise_offset = offsetStr;
+        } else {
+          match.sunset_offset = offsetStr;
+        }
+      }
+      return { provider: 'solar', match };
     }
     if (provider === 'time') {
       switch (timePreset) {
@@ -257,6 +284,22 @@
           <option value="after_sunset">After sunset</option>
           <option value="before_sunrise">Before sunrise</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Offset (minutes, negative = earlier)</label>
+        <div class="offset-row">
+          <input type="number" bind:value={solarOffsetMin} oninput={emitChange}
+            placeholder="0" style="width: 80px;" />
+          <span class="offset-hint">
+            {#if solarOffsetMin < 0}
+              {Math.abs(solarOffsetMin)}min earlier
+            {:else if solarOffsetMin > 0}
+              {solarOffsetMin}min later
+            {:else}
+              exact time
+            {/if}
+          </span>
+        </div>
       </div>
     </div>
   {/if}
@@ -411,4 +454,6 @@
   }
   .remove-btn:hover { color: var(--error); border-color: var(--error); }
   .condition-fields { margin-top: 8px; }
+  .offset-row { display: flex; align-items: center; gap: 8px; }
+  .offset-hint { font-size: 0.85em; color: var(--text-muted); }
 </style>

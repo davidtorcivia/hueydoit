@@ -1,8 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 
-from app.config import settings
 from app.ws import ws_manager
 from app.database import add_log
 
@@ -113,23 +111,22 @@ class SSEListener:
 
             active_rule = state_manager.get_active_rule(target_name)
             if active_rule and not self._matches_expected_state(new_state, active_rule):
-                timeout = settings.external_override_timeout_min
-                expires = datetime.now(timezone.utc) + timedelta(minutes=timeout)
+                overridden_rule_id = active_rule.get("rule_id")
                 await state_manager.set_override(
                     target_name,
                     source="external",
                     on_state=new_state.get("on"),
                     brightness=new_state.get("brightness"),
                     color=new_state.get("color_hex"),
-                    expires_at=expires,
+                    overridden_rule_id=overridden_rule_id,
                 )
                 await ws_manager.broadcast("override_created", {
                     "target": target_name,
                     "source": "external",
-                    "expires_at": expires.isoformat(),
+                    "rule": active_rule.get("rule_name"),
                 })
-                await add_log("info", "sse", f"External change detected on {target_name}, override created",
-                              {"target": target_name, "new_state": new_state})
+                await add_log("info", "sse", f"External change detected on {target_name}, override until rule changes",
+                              {"target": target_name, "new_state": new_state, "overridden_rule_id": overridden_rule_id})
 
             await ws_manager.broadcast("light_state", {
                 "target": target_name,

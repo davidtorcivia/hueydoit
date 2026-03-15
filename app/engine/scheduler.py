@@ -212,9 +212,10 @@ class EngineScheduler:
 
         provider = condition.get("provider")
 
-        # Solar conditions — schedule at sunrise/sunset
+        # Solar conditions — schedule at sunrise/sunset (with offsets)
         if provider == "solar":
-            self._add_solar_transitions(now, tz, transitions)
+            match = condition.get("match", {})
+            self._add_solar_transitions(now, tz, transitions, match if isinstance(match, dict) else {})
             return
 
         if provider not in ("time", "calendar"):
@@ -311,18 +312,30 @@ class EngineScheduler:
                 transitions.add(start)
                 transitions.add(start + timedelta(days=1))
 
-    def _add_solar_transitions(self, now: datetime, tz: zoneinfo.ZoneInfo, transitions: set[datetime]):
-        """Add sunrise/sunset as transition points."""
+    def _add_solar_transitions(self, now: datetime, tz: zoneinfo.ZoneInfo, transitions: set[datetime], match: dict | None = None):
+        """Add sunrise/sunset as transition points, applying offsets from match block."""
         from app.providers.solar import SolarProvider
+        from app.engine.evaluator import _parse_signed_duration
         solar = SolarProvider.compute_fresh(settings.tz, settings.latitude, settings.longitude)
         sunrise_dt = solar.get("_sunrise_dt")
         sunset_dt = solar.get("_sunset_dt")
-        if sunrise_dt and sunrise_dt > now:
+        if not sunrise_dt or not sunset_dt:
+            return
+
+        # Apply offsets from the rule condition
+        sunrise_offset = match.get("sunrise_offset") if match else None
+        sunset_offset = match.get("sunset_offset") if match else None
+        if sunrise_offset:
+            sunrise_dt = sunrise_dt + _parse_signed_duration(sunrise_offset)
+        if sunset_offset:
+            sunset_dt = sunset_dt + _parse_signed_duration(sunset_offset)
+
+        if sunrise_dt > now:
             transitions.add(sunrise_dt)
-        if sunset_dt and sunset_dt > now:
+        if sunset_dt > now:
             transitions.add(sunset_dt)
         # Also schedule for tomorrow's sunrise if both have passed
-        if sunrise_dt and sunset_dt and sunrise_dt <= now and sunset_dt <= now:
+        if sunrise_dt <= now and sunset_dt <= now:
             tomorrow = now.date() + timedelta(days=1)
             try:
                 from astral import LocationInfo
@@ -332,9 +345,11 @@ class EngineScheduler:
                     latitude=settings.latitude, longitude=settings.longitude,
                 )
                 s = sun(location.observer, date=tomorrow, tzinfo=tz)
-                transitions.add(s["sunrise"])
+                t_sunrise = s["sunrise"]
+                if sunrise_offset:
+                    t_sunrise = t_sunrise + _parse_signed_duration(sunrise_offset)
+                transitions.add(t_sunrise)
             except Exception:
-                # Fallback: midnight + 6h
                 transitions.add(now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1, hours=6))
 
     async def _breathe_loop(self):

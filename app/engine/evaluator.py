@@ -23,6 +23,16 @@ def _parse_duration(s: str) -> timedelta:
     return timedelta(minutes=int(s))
 
 
+def _parse_signed_duration(s: str) -> timedelta:
+    """Parse optionally-signed duration: '-30m', '1h', '30m', '-1h'."""
+    s = s.strip().lower()
+    negative = s.startswith("-")
+    if negative or s.startswith("+"):
+        s = s[1:]
+    td = _parse_duration(s)
+    return -td if negative else td
+
+
 class RuleEvaluator:
     async def evaluate_all(self):
         await state_manager.cleanup_expired_overrides()
@@ -134,7 +144,23 @@ class RuleEvaluator:
         for target_name, target_info in target_map.items():
             override = await state_manager.get_override(target_name)
             if override:
-                continue
+                overridden_rule_id = override.get("overridden_rule_id")
+                if overridden_rule_id is not None:
+                    # Override is tied to a specific rule — clear it when the
+                    # winning rule changes so the new rule can take effect.
+                    assignment = target_assignments.get(target_name)
+                    current_rule_id = assignment["rule_id"] if assignment else None
+                    if current_rule_id != overridden_rule_id:
+                        await state_manager.clear_override(target_name)
+                        logger.info(
+                            "Override cleared for %s: winning rule changed from %s",
+                            target_name, overridden_rule_id,
+                        )
+                        # Fall through to apply the new rule below
+                    else:
+                        continue  # Same rule still active — respect the override
+                else:
+                    continue  # Fixed-expiration or manual override — respect it
 
             assignment = target_assignments.get(target_name)
 
@@ -233,6 +259,8 @@ class RuleEvaluator:
             state = provider_states.get(provider_name)
             if state is None:
                 return False
+            if provider_name == "solar":
+                state, match_block = self._apply_solar_offsets(state, match_block)
             return self._match_block(match_block, state)
         else:
             return self._match_block(match_block, provider_states)
@@ -305,6 +333,48 @@ class RuleEvaluator:
                 elif value != expected:
                     return False
         return True
+
+    def _apply_solar_offsets(self, state: dict, match_block: dict) -> tuple[dict, dict]:
+        """Shift sunrise/sunset by offsets and recompute period/phase."""
+        sunrise_offset = match_block.get("sunrise_offset")
+        sunset_offset = match_block.get("sunset_offset")
+        if not sunrise_offset and not sunset_offset:
+            return state, match_block
+
+        filtered = {k: v for k, v in match_block.items()
+                    if k not in ("sunrise_offset", "sunset_offset")}
+
+        sunrise_dt = state.get("_sunrise_dt")
+        sunset_dt = state.get("_sunset_dt")
+        if not sunrise_dt or not sunset_dt:
+            return state, filtered
+
+        if sunrise_offset:
+            sunrise_dt = sunrise_dt + _parse_signed_duration(sunrise_offset)
+        if sunset_offset:
+            sunset_dt = sunset_dt + _parse_signed_duration(sunset_offset)
+
+        import zoneinfo
+        from app.config import settings
+        now = datetime.now(zoneinfo.ZoneInfo(settings.tz))
+
+        if now < sunrise_dt:
+            period, phase = "night", "before_sunrise"
+        elif now > sunset_dt:
+            period, phase = "night", "after_sunset"
+        else:
+            period, phase = "day", "daytime"
+
+        adjusted = {
+            **state,
+            "period": period,
+            "phase": phase,
+            "sunrise": sunrise_dt.strftime("%H:%M"),
+            "sunset": sunset_dt.strftime("%H:%M"),
+            "_sunrise_dt": sunrise_dt,
+            "_sunset_dt": sunset_dt,
+        }
+        return adjusted, filtered
 
     def _apply_hysteresis(
         self, rule_id: int, condition: dict, raw_match: bool, provider_states: dict

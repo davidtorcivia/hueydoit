@@ -36,7 +36,7 @@ class StateManager:
                     pass
 
             cursor = await db.execute(
-                "SELECT target_name, source, color, brightness, on_state, expires_at FROM overrides"
+                "SELECT target_name, source, color, brightness, on_state, expires_at, overridden_rule_id FROM overrides"
             )
             rows = await cursor.fetchall()
             for row in rows:
@@ -46,6 +46,7 @@ class StateManager:
                     "brightness": row[3],
                     "on_state": bool(row[4]) if row[4] is not None else None,
                     "expires_at": datetime.fromisoformat(row[5]).replace(tzinfo=timezone.utc) if row[5] else None,
+                    "overridden_rule_id": row[6],
                 }
 
             cursor = await db.execute(
@@ -123,11 +124,12 @@ class StateManager:
         self._overrides[target] = override
         async with get_db() as db:
             await db.execute(
-                """INSERT INTO overrides (target_name, source, color, brightness, on_state, expires_at)
-                   VALUES (?, ?, ?, ?, ?, ?)
+                """INSERT INTO overrides (target_name, source, color, brightness, on_state, expires_at, overridden_rule_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(target_name) DO UPDATE SET
                      source=excluded.source, color=excluded.color, brightness=excluded.brightness,
-                     on_state=excluded.on_state, expires_at=excluded.expires_at, created_at=CURRENT_TIMESTAMP""",
+                     on_state=excluded.on_state, expires_at=excluded.expires_at,
+                     overridden_rule_id=excluded.overridden_rule_id, created_at=CURRENT_TIMESTAMP""",
                 (
                     target,
                     source,
@@ -135,6 +137,7 @@ class StateManager:
                     kwargs.get("brightness"),
                     kwargs.get("on_state"),
                     kwargs.get("expires_at").isoformat() if kwargs.get("expires_at") else None,
+                    kwargs.get("overridden_rule_id"),
                 ),
             )
             await db.commit()

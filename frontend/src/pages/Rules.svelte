@@ -151,10 +151,22 @@
       if (m.active_holiday) return `Holiday: ${m.active_holiday}`;
     }
     if (p === 'solar') {
-      if (m.period === 'day') return 'Daytime';
-      if (m.phase === 'before_sunrise') return 'Before sunrise';
-      if (m.period === 'night') return 'After sunset';
-      return m.period || m.phase || 'Solar';
+      let label = 'Solar';
+      if (m.period === 'day') label = 'Daytime';
+      else if (m.phase === 'before_sunrise') label = 'Before sunrise';
+      else if (m.period === 'night') label = 'After sunset';
+      else label = m.period || m.phase || 'Solar';
+      const rawOffset = m.sunrise_offset || m.sunset_offset;
+      if (rawOffset) {
+        const neg = rawOffset.startsWith('-');
+        const abs = rawOffset.replace(/^[+-]/, '');
+        let mins = 0;
+        if (abs.endsWith('h')) mins = parseInt(abs) * 60;
+        else if (abs.endsWith('m')) mins = parseInt(abs);
+        else mins = parseInt(abs);
+        if (mins > 0) label += neg ? ` (${mins}min early)` : ` (+${mins}min)`;
+      }
+      return label;
     }
     if (p === 'weather') {
       if (m.temp_f) {
