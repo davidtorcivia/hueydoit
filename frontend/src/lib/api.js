@@ -16,6 +16,7 @@ async function request(method, path, body = null) {
 
 export const api = {
   getStatus: () => request('GET', '/api/status'),
+  getNextTrigger: () => request('GET', '/api/next-trigger'),
 
   getLights: () => request('GET', '/api/lights'),
   addLight: (data) => request('POST', '/api/lights', data),

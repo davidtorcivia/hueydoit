@@ -68,6 +68,14 @@ class EngineScheduler:
             replace_existing=True,
         )
 
+        self._scheduler.add_job(
+            self._periodic_eval,
+            IntervalTrigger(minutes=5),
+            id="periodic_eval",
+            name="Periodic rule evaluation",
+            replace_existing=True,
+        )
+
         self._breathe_phase = False
         self._scheduler.add_job(
             self._breathe_loop,
@@ -387,6 +395,62 @@ class EngineScheduler:
                         await bridge_client._bridge.groups.grouped_light.set_state(gl.id, **kwargs)
             except Exception as e:
                 logger.debug("Breathe pulse failed for %s: %s", target_name, e)
+
+    async def get_next_trigger_info(self) -> dict:
+        """Return info about upcoming evaluations and predicted rule activations."""
+        tz = zoneinfo.ZoneInfo(settings.tz)
+        now = datetime.now(tz)
+
+        # Get all upcoming transitions
+        async with get_db() as db:
+            cursor = await db.execute("SELECT config FROM rules WHERE enabled = 1")
+            rows = await cursor.fetchall()
+
+        transitions: set[datetime] = set()
+        for row in rows:
+            try:
+                config = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            except (json.JSONDecodeError, TypeError):
+                continue
+            self._extract_time_transitions(config.get("condition", {}), now, tz, transitions)
+
+        future = sorted(t for t in transitions if t > now)
+
+        # Get the next scheduled job time
+        job = self._scheduler.get_job("time_eval")
+        next_eval = job.next_run_time if job else None
+
+        # Predict what happens at each upcoming transition (up to 5)
+        upcoming = []
+        prev_predictions = await evaluator.predict_at(now)
+        prev_targets = {p["target"]: p for p in prev_predictions}
+
+        for t in future[:5]:
+            predictions = await evaluator.predict_at(t + timedelta(seconds=1))
+            new_targets = {p["target"]: p for p in predictions}
+
+            # Only include if something changes
+            changed = new_targets != prev_targets
+            if changed:
+                upcoming.append({
+                    "time": t.isoformat(),
+                    "targets": predictions,
+                })
+                prev_targets = new_targets
+
+        # Also include current predictions
+        current = await evaluator.predict_at(now)
+
+        return {
+            "next_evaluation": next_eval.isoformat() if next_eval else None,
+            "current": current,
+            "upcoming": upcoming,
+        }
+
+    async def _periodic_eval(self):
+        """Fallback evaluation every 5 minutes to keep state fresh."""
+        logger.debug("Periodic evaluation running")
+        await evaluator.evaluate_all()
 
     async def _on_time_transition(self):
         """Fired at a computed time-condition transition point."""

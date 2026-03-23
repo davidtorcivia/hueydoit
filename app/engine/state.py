@@ -99,6 +99,12 @@ class StateManager:
             return True
         return (datetime.now(timezone.utc) - ts) > ttl
 
+    def update_provider_state_memory(self, name: str, state: dict):
+        """Update cached state and timestamp in memory only (no DB write).
+        Used by the evaluator for inline-computed providers (time, calendar, solar)."""
+        self._provider_states[name] = state
+        self._provider_timestamps[name] = datetime.now(timezone.utc)
+
     def get_all_provider_states(self) -> dict:
         return dict(self._provider_states)
 

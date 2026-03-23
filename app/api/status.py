@@ -70,3 +70,12 @@ async def get_status():
         "overrides": await state_manager.get_all_overrides(),
         "bridge_connected": bridge_client.connected,
     }
+
+
+@router.get("/next-trigger")
+async def get_next_trigger():
+    """Return predictions for upcoming rule activations."""
+    try:
+        return await engine_scheduler.get_next_trigger_info()
+    except Exception as e:
+        return {"error": str(e), "next_evaluation": None, "current": [], "upcoming": []}

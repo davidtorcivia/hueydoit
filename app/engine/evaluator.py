@@ -34,6 +34,9 @@ def _parse_signed_duration(s: str) -> timedelta:
 
 
 class RuleEvaluator:
+    def __init__(self):
+        self._now_override: datetime | None = None
+
     async def evaluate_all(self):
         await state_manager.cleanup_expired_overrides()
 
@@ -83,6 +86,12 @@ class RuleEvaluator:
         existing_solar = provider_states.get("solar", {})
         provider_states["solar"] = {**existing_solar, **solar_fresh}
 
+        # Update cached state so the status endpoint shows fresh data
+        state_manager.update_provider_state_memory("time", provider_states["time"])
+        state_manager.update_provider_state_memory("calendar", provider_states["calendar"])
+        solar_display = {k: v for k, v in provider_states["solar"].items() if not k.startswith("_")}
+        state_manager.update_provider_state_memory("solar", solar_display)
+
         target_assignments: dict[str, dict] = {}
         new_breathing: dict[str, dict] = {}  # targets that need continuous breathe
 
@@ -102,6 +111,11 @@ class RuleEvaluator:
 
             raw_match = self._match_condition(condition, provider_states)
             final_match = self._apply_hysteresis(rule_id, condition, raw_match, provider_states)
+
+            logger.info(
+                "Rule '%s' (id=%d, pri=%d): raw=%s final=%s targets=%s",
+                rule_name, rule_id, rule_priority, raw_match, final_match, rule_targets,
+            )
 
             state_manager.set_hysteresis(
                 rule_id,
@@ -198,6 +212,13 @@ class RuleEvaluator:
                     effect["brightness"] = brightness_map[target_name]
 
                 cmd = build_light_command(effect, target_info["type"])
+
+                logger.info(
+                    "Applying rule '%s' to %s: colors=%s brightness=%s mode=%s cmd_keys=%s",
+                    assignment["rule_name"], target_name,
+                    effect.get("colors"), effect.get("brightness"),
+                    effect.get("mode"), list(cmd.keys()),
+                )
 
                 if bridge_client.connected:
                     await bridge_client.set_light_state(
@@ -356,7 +377,7 @@ class RuleEvaluator:
 
         import zoneinfo
         from app.config import settings
-        now = datetime.now(zoneinfo.ZoneInfo(settings.tz))
+        now = self._now_override or datetime.now(zoneinfo.ZoneInfo(settings.tz))
 
         if now < sunrise_dt:
             period, phase = "night", "before_sunrise"
@@ -437,6 +458,128 @@ class RuleEvaluator:
             if current is None:
                 return None
         return current
+
+
+    async def predict_at(self, target_time: datetime) -> list[dict]:
+        """Dry-run evaluation at a future time. Returns predicted target assignments."""
+        import zoneinfo
+        from app.config import settings
+        from app.providers.calendar_provider import CalendarProvider
+        from app.providers.solar import SolarProvider
+
+        tz = zoneinfo.ZoneInfo(settings.tz)
+        target_local = target_time.astimezone(tz) if target_time.tzinfo else target_time
+
+        # Build simulated provider states
+        provider_states = state_manager.get_all_provider_states()
+
+        provider_states["time"] = {
+            "hour": target_local.hour,
+            "minute": target_local.minute,
+            "second": target_local.second,
+            "day_of_week": target_local.strftime("%A").lower(),
+            "date": target_local.strftime("%Y-%m-%d"),
+            "is_weekend": target_local.weekday() >= 5,
+            "month": target_local.month,
+            "day": target_local.day,
+            "year": target_local.year,
+        }
+
+        provider_states["calendar"] = CalendarProvider.compute_state(target_local.date())
+
+        # Compute solar for today but determine period at the target time
+        solar_fresh = SolarProvider.compute_fresh(settings.tz, settings.latitude, settings.longitude)
+        sunrise_dt = solar_fresh.get("_sunrise_dt")
+        sunset_dt = solar_fresh.get("_sunset_dt")
+        if sunrise_dt and sunset_dt:
+            if target_local < sunrise_dt:
+                solar_fresh["period"] = "night"
+                solar_fresh["phase"] = "before_sunrise"
+            elif target_local > sunset_dt:
+                solar_fresh["period"] = "night"
+                solar_fresh["phase"] = "after_sunset"
+            else:
+                solar_fresh["period"] = "day"
+                solar_fresh["phase"] = "daytime"
+        existing_solar = provider_states.get("solar", {})
+        provider_states["solar"] = {**existing_solar, **solar_fresh}
+
+        # Fetch rules and targets
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT id, name, priority, config FROM rules WHERE enabled = 1 ORDER BY priority ASC"
+            )
+            rules = await cursor.fetchall()
+            cursor = await db.execute("SELECT name, type, hue_id, friendly_name FROM targets")
+            targets = await cursor.fetchall()
+
+        target_map = {row[0]: {"name": row[0], "type": row[1], "hue_id": row[2], "friendly_name": row[3]} for row in targets}
+
+        # Use time override so solar offset checks use the simulated time
+        self._now_override = target_local
+        try:
+            return self._predict_rules(rules, provider_states, target_map)
+        finally:
+            self._now_override = None
+
+    def _predict_rules(self, rules, provider_states, target_map) -> list[dict]:
+        target_assignments: dict[str, dict] = {}
+
+        for rule_row in rules:
+            rule_id, rule_name = rule_row[0], rule_row[1]
+            try:
+                config = json.loads(rule_row[3]) if isinstance(rule_row[3], str) else rule_row[3]
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            condition = config.get("condition", {})
+            effect = config.get("effect", {})
+            rule_targets = config.get("targets", [])
+
+            if not self._match_condition(condition, provider_states):
+                continue
+
+            for target_name in rule_targets:
+                if target_name in target_assignments or target_name not in target_map:
+                    continue
+
+                # Resolve color for this target
+                t_effect = dict(effect)
+                color = None
+
+                if t_effect.get("use_holiday_colors"):
+                    holiday_state = provider_states.get("holiday", {})
+                    active_colors = holiday_state.get("active_colors", [])
+                    if active_colors:
+                        try:
+                            idx = rule_targets.index(target_name)
+                            color = active_colors[idx % len(active_colors)]
+                        except ValueError:
+                            color = active_colors[0]
+
+                color_map = t_effect.get("color_map", {})
+                if color_map and target_name in color_map:
+                    color = color_map[target_name]
+
+                if color is None:
+                    colors = t_effect.get("colors", [])
+                    color = colors[0] if colors else None
+
+                brightness = t_effect.get("brightness_map", {}).get(
+                    target_name, t_effect.get("brightness")
+                )
+
+                target_assignments[target_name] = {
+                    "target": target_name,
+                    "friendly_name": target_map[target_name].get("friendly_name", target_name),
+                    "rule_name": rule_name,
+                    "rule_id": rule_id,
+                    "color": color,
+                    "brightness": brightness,
+                    "mode": t_effect.get("mode", "static"),
+                }
+
+        return list(target_assignments.values())
 
 
 evaluator = RuleEvaluator()

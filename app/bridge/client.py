@@ -169,14 +169,10 @@ class HueBridgeClient:
             logger.debug("Set %s %s state: %s", resource_type, hue_id, state)
         except Exception as e:
             logger.error("Failed to set %s %s state: %s", resource_type, hue_id, e)
-            # Retry with minimal params
+            # Retry with full params after a short delay
             await asyncio.sleep(1.0)
             try:
-                kwargs = {}
-                if on_val is not None:
-                    kwargs["on"] = on_val
-                if brightness is not None:
-                    kwargs["brightness"] = brightness
+                kwargs = self._build_kwargs(on_val, brightness, color_xy, color_temp, transition)
                 if resource_type == "light":
                     light = self._find_light(hue_id)
                     if light:

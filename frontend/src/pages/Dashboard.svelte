@@ -8,9 +8,11 @@
   let providers = $state([]);
   let loading = $state(true);
   let pairMessage = $state('');
+  let nextTrigger = $state(null);
 
   $effect(() => {
     loadStatus();
+    loadNextTrigger();
     const unsub = addWSListener((event, data) => {
       if (event === 'light_state') {
         const idx = lights.findIndex(l => l.name === data.target);
@@ -26,11 +28,14 @@
           providers = [...providers];
         }
       }
-      if (event === 'override_created' || event === 'override_cleared') {
+      if (event === 'rule_activated' || event === 'override_created' || event === 'override_cleared') {
         loadStatus();
+        loadNextTrigger();
       }
     });
-    return unsub;
+    // Refresh predictions every 60s
+    const interval = setInterval(loadNextTrigger, 60000);
+    return () => { unsub(); clearInterval(interval); };
   });
 
   async function loadStatus() {
@@ -42,6 +47,31 @@
       console.error('Failed to load status:', e);
     }
     loading = false;
+  }
+
+  async function loadNextTrigger() {
+    try {
+      nextTrigger = await api.getNextTrigger();
+    } catch (e) {
+      console.error('Failed to load next trigger:', e);
+    }
+  }
+
+  function formatTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function formatCountdown(isoStr) {
+    if (!isoStr) return '';
+    const diff = new Date(isoStr) - Date.now();
+    if (diff <= 0) return 'now';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `in ${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const rm = mins % 60;
+    return rm > 0 ? `in ${hrs}h ${rm}m` : `in ${hrs}h`;
   }
 
   async function handleOverride(target, override) {
@@ -103,6 +133,58 @@
     </div>
   {/if}
 
+  {#if nextTrigger}
+    <h2 class="mb-3">Coming Up</h2>
+    <div class="coming-up-section mb-4">
+      {#if nextTrigger.current && nextTrigger.current.length > 0}
+        <div class="card coming-up-card">
+          <div class="coming-up-header">
+            <span class="badge ok">Active Now</span>
+          </div>
+          <div class="coming-up-targets">
+            {#each nextTrigger.current as pred}
+              <div class="prediction-row">
+                <div class="pred-color" style="background: {pred.color || '#888'}"></div>
+                <div class="pred-info">
+                  <span class="pred-name">{pred.friendly_name || pred.target}</span>
+                  <span class="pred-rule">{pred.rule_name}</span>
+                </div>
+                <span class="pred-mode badge info">{pred.mode}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#each nextTrigger.upcoming || [] as event, i}
+        <div class="card coming-up-card">
+          <div class="coming-up-header">
+            <span class="coming-up-time">{formatTime(event.time)}</span>
+            <span class="coming-up-countdown">{formatCountdown(event.time)}</span>
+          </div>
+          <div class="coming-up-targets">
+            {#each event.targets as pred}
+              <div class="prediction-row">
+                <div class="pred-color" style="background: {pred.color || '#888'}"></div>
+                <div class="pred-info">
+                  <span class="pred-name">{pred.friendly_name || pred.target}</span>
+                  <span class="pred-rule">{pred.rule_name}</span>
+                </div>
+                <span class="pred-mode badge info">{pred.mode}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/each}
+
+      {#if (!nextTrigger.current || nextTrigger.current.length === 0) && (!nextTrigger.upcoming || nextTrigger.upcoming.length === 0)}
+        <div class="card">
+          <p style="color: var(--text-muted); font-size: 13px;">No upcoming rule activations predicted.</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <h2 class="mb-3">Providers</h2>
   <div class="grid grid-3">
     {#each providers as provider (provider.name)}
@@ -110,3 +192,63 @@
     {/each}
   </div>
 {/if}
+
+<style>
+  .coming-up-section {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .coming-up-card {
+    flex: 1;
+    min-width: 220px;
+    max-width: 400px;
+  }
+  .coming-up-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .coming-up-time {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .coming-up-countdown {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .coming-up-targets {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .prediction-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pred-color {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border-light);
+    flex-shrink: 0;
+  }
+  .pred-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .pred-name {
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .pred-rule {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .pred-mode {
+    flex-shrink: 0;
+  }
+</style>
