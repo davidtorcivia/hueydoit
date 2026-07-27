@@ -1,6 +1,9 @@
+import logging
 from datetime import date, timedelta
 
 from app.holidays.cultural import _easter
+
+logger = logging.getLogger(__name__)
 
 
 def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
@@ -119,6 +122,13 @@ def get_international_holidays(year: int) -> list[dict]:
 
 
 def _holi(year: int) -> date:
+    """Holi — Phalguna Purnima.
+
+    The full moon in the Feb 25 - Mar 26 window; an earlier February full moon
+    belongs to the previous lunar month. Agrees with the verified table for
+    2024-2030 except 2030, where it lands a day early — covered by the holiday's
+    one-day window.
+    """
     known = {
         2024: date(2024, 3, 25),
         2025: date(2025, 3, 14),
@@ -128,4 +138,15 @@ def _holi(year: int) -> date:
         2029: date(2029, 2, 28),
         2030: date(2030, 3, 20),
     }
-    return known.get(year, date(year, 3, 15))
+    if year in known:
+        return known[year]
+
+    try:
+        from app.holidays.cultural import _full_moons
+
+        for moment in _full_moons(year):
+            if (moment.month == 2 and moment.day >= 25) or (moment.month == 3 and moment.day <= 26):
+                return moment.date()
+    except Exception as e:
+        logger.warning("Holi computation failed for %s (%s); using approximation", year, e)
+    return date(year, 3, 15)

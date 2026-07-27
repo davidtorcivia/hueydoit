@@ -31,10 +31,16 @@ class SolarProvider(Provider):
             sunset = s["sunset"]
         except Exception as e:
             logger.error("Failed to compute sun times: %s", e)
+            # period must be day/night — "daytime" is a phase value, and using it
+            # here meant every solar rule silently stopped matching on failure.
+            fallback_period = "day" if 6 <= now.hour < 18 else "night"
             return {
                 "sunrise": "06:00",
                 "sunset": "18:00",
-                "period": "daytime",
+                "period": fallback_period,
+                "phase": "daytime" if fallback_period == "day" else (
+                    "before_sunrise" if now.hour < 6 else "after_sunset"
+                ),
                 "dawn": "05:30",
                 "dusk": "18:30",
                 "solar_noon": "12:00",
@@ -43,17 +49,20 @@ class SolarProvider(Provider):
 
         try:
             dawn_time = dawn(location.observer, date=now.date(), tzinfo=tz)
-        except Exception:
+        except Exception as e:
+            logger.debug("astral dawn() unavailable (%s), deriving from sunrise/sunset", e)
             dawn_time = sunrise - timedelta(minutes=30)
 
         try:
             dusk_time = dusk(location.observer, date=now.date(), tzinfo=tz)
-        except Exception:
+        except Exception as e:
+            logger.debug("astral dusk() unavailable (%s), deriving from sunrise/sunset", e)
             dusk_time = sunset + timedelta(minutes=30)
 
         try:
             noon_time = noon(location.observer, date=now.date(), tzinfo=tz)
-        except Exception:
+        except Exception as e:
+            logger.debug("astral noon() unavailable (%s), deriving from sunrise/sunset", e)
             noon_time = sunrise + (sunset - sunrise) / 2
 
         if now < sunrise:
@@ -97,8 +106,17 @@ class SolarProvider(Provider):
             s = sun(location.observer, date=now.date(), tzinfo=tz)
             sunrise = s["sunrise"]
             sunset = s["sunset"]
-        except Exception:
-            return {"period": "daytime", "sunrise": "06:00", "sunset": "18:00"}
+        except Exception as e:
+            logger.error("Failed to compute sun times: %s", e)
+            period = "day" if 6 <= now.hour < 18 else "night"
+            return {
+                "period": period,
+                "phase": "daytime" if period == "day" else (
+                    "before_sunrise" if now.hour < 6 else "after_sunset"
+                ),
+                "sunrise": "06:00",
+                "sunset": "18:00",
+            }
 
         if now < sunrise:
             period = "night"

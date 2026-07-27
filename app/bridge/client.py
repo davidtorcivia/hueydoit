@@ -59,8 +59,8 @@ class HueBridgeClient:
         if self._bridge:
             try:
                 await self._bridge.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Bridge close failed during disconnect: %s", e)
             self._bridge = None
         self._connected = False
         logger.info("Disconnected from Hue bridge")
@@ -80,8 +80,9 @@ class HueBridgeClient:
             device = self._bridge.lights.get_device(light.id)
             if device and device.metadata and device.metadata.name:
                 return device.metadata.name
-        except Exception:
-            pass
+        except Exception as e:
+            # Falling through means the UI shows a raw UUID instead of a name.
+            logger.debug("No device name for light %s (%s)", light.id, e)
         return light.id
 
     async def get_lights(self) -> list[dict]:

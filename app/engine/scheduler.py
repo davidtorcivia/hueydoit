@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.jobstores.base import JobLookupError
 
 from app.config import settings
 from app.engine.state import state_manager
@@ -180,8 +181,8 @@ class EngineScheduler:
         at the exact moment the next condition transitions."""
         try:
             self._scheduler.remove_job("time_eval")
-        except Exception:
-            pass
+        except JobLookupError:
+            pass  # no pending job, which is the normal case
 
         tz = zoneinfo.ZoneInfo(settings.tz)
         now = datetime.now(tz)

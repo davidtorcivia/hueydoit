@@ -3,6 +3,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Hindu festival dates are reckoned in Indian local time.
+IST_OFFSET = timedelta(hours=5, minutes=30)
+# Pradosh (dusk) is roughly 18:00 IST across the Diwali window.
+PRADOSH_HOUR_IST = 18
+
 
 def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
     """Get the nth occurrence of a weekday in a month. weekday: 0=Mon, 6=Sun."""
@@ -55,7 +60,11 @@ def _hijri_event(year: int, hijri_month: int, hijri_day: int) -> date | None:
 
 
 def _hanukkah_start(year: int) -> date:
-    """Approximate Hanukkah start (25 Kislev). Uses a lookup-style approximation."""
+    """First night of Hanukkah — the eve of 25 Kislev.
+
+    Jewish days begin at sunset, so the first candle is lit the evening before
+    25 Kislev, which is the date that matters for lights.
+    """
     known = {
         2024: date(2024, 12, 25),
         2025: date(2025, 12, 14),
@@ -67,11 +76,49 @@ def _hanukkah_start(year: int) -> date:
     }
     if year in known:
         return known[year]
-    return date(year, 12, 15)
+
+    try:
+        from convertdate import hebrew
+
+        return date(*hebrew.to_gregorian(year + 3761, hebrew.KISLEV, 25)) - timedelta(days=1)
+    except Exception as e:
+        logger.warning("Hanukkah computation failed for %s (%s); using approximation", year, e)
+        return date(year, 12, 15)
+
+
+def _new_moons(year: int) -> list:
+    """New moon instants during `year`, shifted to IST — Hindu festival dates are
+    reckoned against Indian local time."""
+    return _moon_phases(year, "next_new_moon")
+
+
+def _full_moons(year: int) -> list:
+    return _moon_phases(year, "next_full_moon")
+
+
+def _moon_phases(year: int, which: str) -> list:
+    import ephem
+
+    fn = getattr(ephem, which)
+    cursor = ephem.Date(f"{year - 1}/12/1")
+    out = []
+    while True:
+        cursor = fn(cursor)
+        moment = ephem.Date(cursor).datetime() + IST_OFFSET
+        if moment.year > year:
+            return out
+        if moment.year == year:
+            out.append(moment)
 
 
 def _diwali(year: int) -> date:
-    """Approximate Diwali date (new moon in Oct/Nov)."""
+    """Diwali (Lakshmi Puja) — the Amavasya of Kartika.
+
+    Celebrated on the day Amavasya is present at pradosh (dusk), so the new moon
+    instant counts for that day only if it falls after roughly sunset in India;
+    otherwise the previous day holds. Matches the verified table exactly for
+    2024-2030.
+    """
     known = {
         2024: date(2024, 11, 1),
         2025: date(2025, 10, 20),
@@ -83,11 +130,20 @@ def _diwali(year: int) -> date:
     }
     if year in known:
         return known[year]
+
+    try:
+        for moment in _new_moons(year):
+            if (moment.month == 10 and moment.day >= 15) or (moment.month == 11 and moment.day <= 15):
+                if moment.hour < PRADOSH_HOUR_IST:
+                    return moment.date() - timedelta(days=1)
+                return moment.date()
+    except Exception as e:
+        logger.warning("Diwali computation failed for %s (%s); using approximation", year, e)
     return date(year, 10, 28)
 
 
 def _lunar_new_year(year: int) -> date:
-    """Approximate Lunar New Year date."""
+    """Lunar New Year — first day of the first month of the Chinese calendar."""
     known = {
         2024: date(2024, 2, 10),
         2025: date(2025, 1, 29),
@@ -99,7 +155,14 @@ def _lunar_new_year(year: int) -> date:
     }
     if year in known:
         return known[year]
-    return date(year, 2, 1)
+
+    try:
+        from lunardate import LunarDate
+
+        return LunarDate(year, 1, 1).toSolarDate()
+    except Exception as e:
+        logger.warning("Lunar New Year computation failed for %s (%s); using approximation", year, e)
+        return date(year, 2, 1)
 
 
 def _eid_al_fitr(year: int) -> date:

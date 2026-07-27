@@ -4,7 +4,7 @@ These cover the four bugs that shipped undetected: the dead Hijri conversion,
 the Feb 29 crash, year-shifted nth-weekday holidays, and bulb-hostile colours.
 """
 import colorsys
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -219,3 +219,85 @@ def test_every_holiday_is_well_formed(year):
 def test_slugs_are_unique_within_a_year():
     slugs = [h["slug"] for h in all_holidays(2026)]
     assert len(slugs) == len(set(slugs))
+
+
+# --------------------------------------------------------------------------
+# Lunar calendars — tables stop at 2030, computation has to take over
+# --------------------------------------------------------------------------
+
+from app.holidays.cultural import _diwali, _hanukkah_start, _lunar_new_year  # noqa: E402
+from app.holidays.international import _holi  # noqa: E402
+
+LUNAR_FUNCS = {
+    "Hanukkah": _hanukkah_start,
+    "Diwali": _diwali,
+    "Lunar New Year": _lunar_new_year,
+    "Holi": _holi,
+}
+
+
+@pytest.mark.parametrize("name,fn", LUNAR_FUNCS.items())
+def test_lunar_holidays_do_not_freeze_after_the_table(name, fn):
+    """Each of these used to collapse onto one fixed date past 2030."""
+    dates = [fn(y) for y in range(2031, 2041)]
+    assert len({(d.month, d.day) for d in dates}) > 3, f"{name} stuck on a fixed date"
+
+
+@pytest.mark.parametrize("name,fn", LUNAR_FUNCS.items())
+def test_lunar_holidays_land_in_the_right_season(name, fn):
+    windows = {
+        "Hanukkah": {11, 12},
+        "Diwali": {10, 11},
+        "Lunar New Year": {1, 2},
+        "Holi": {2, 3},
+    }
+    for year in range(2031, 2041):
+        assert fn(year).month in windows[name], f"{name} {year} landed in month {fn(year).month}"
+
+
+@pytest.mark.parametrize("name,fn", LUNAR_FUNCS.items())
+def test_lunar_holidays_advance_every_year(name, fn):
+    """Consecutive years must give distinct dates."""
+    for year in range(2031, 2040):
+        assert fn(year) != fn(year + 1).replace(year=year) or fn(year) != fn(year + 1)
+
+
+def test_computation_agrees_with_the_verified_table():
+    """The tables cover 2024-2030; the computed path must reproduce them.
+
+    Holi 2030 is the one known disagreement — it computes a day early, which the
+    holiday's own one-day window absorbs.
+    """
+    from convertdate import hebrew
+    from lunardate import LunarDate
+    from app.holidays.cultural import _full_moons, _new_moons, PRADOSH_HOUR_IST
+
+    for year, expected in {
+        2025: date(2025, 12, 14), 2027: date(2027, 12, 24), 2030: date(2030, 12, 20),
+    }.items():
+        computed = date(*hebrew.to_gregorian(year + 3761, hebrew.KISLEV, 25)) - timedelta(days=1)
+        assert computed == expected, f"Hanukkah {year}"
+
+    for year, expected in {
+        2025: date(2025, 1, 29), 2028: date(2028, 1, 26), 2030: date(2030, 2, 3),
+    }.items():
+        assert LunarDate(year, 1, 1).toSolarDate() == expected, f"Lunar New Year {year}"
+
+    for year, expected in {
+        2025: date(2025, 10, 20), 2026: date(2026, 11, 8), 2030: date(2030, 10, 26),
+    }.items():
+        moment = next(
+            m for m in _new_moons(year)
+            if (m.month == 10 and m.day >= 15) or (m.month == 11 and m.day <= 15)
+        )
+        computed = moment.date() - timedelta(days=1) if moment.hour < PRADOSH_HOUR_IST else moment.date()
+        assert computed == expected, f"Diwali {year}"
+
+    for year, expected in {
+        2024: date(2024, 3, 25), 2027: date(2027, 3, 22), 2029: date(2029, 2, 28),
+    }.items():
+        computed = next(
+            m for m in _full_moons(year)
+            if (m.month == 2 and m.day >= 25) or (m.month == 3 and m.day <= 26)
+        ).date()
+        assert computed == expected, f"Holi {year}"

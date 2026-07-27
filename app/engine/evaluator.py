@@ -487,6 +487,11 @@ class RuleEvaluator:
 
         provider_states["calendar"] = CalendarProvider.compute_state(target_local.date())
 
+        # Holiday state was reused from the cached "today" value, so a preview of a
+        # future date showed the seasonal rule winning when a holiday would actually
+        # take it at a higher priority. Recompute for the simulated date.
+        provider_states["holiday"] = await self._holiday_state_for(target_local.date())
+
         # Compute solar for today but determine period at the target time
         solar_fresh = SolarProvider.compute_fresh(settings.tz, settings.latitude, settings.longitude)
         sunrise_dt = solar_fresh.get("_sunrise_dt")
@@ -521,6 +526,34 @@ class RuleEvaluator:
             return self._predict_rules(rules, provider_states, target_map)
         finally:
             self._now_override = None
+
+    async def _holiday_state_for(self, on_date) -> dict:
+        """Holiday provider state as it would be on `on_date`."""
+        from app.holidays.loader import load_all_holidays, is_holiday_active
+
+        try:
+            holidays = await load_all_holidays(on_date.year)
+        except Exception as e:
+            logger.warning("Could not load holidays for %s: %s", on_date.year, e)
+            return {}
+
+        active = [
+            {
+                "name": h.name, "slug": h.slug, "colors": h.colors,
+                "category": h.category, "priority": h.priority,
+            }
+            for h in holidays
+            if is_holiday_active(h, on_date)
+        ]
+        active.sort(key=lambda x: x.get("priority", 50))
+
+        return {
+            "active_holidays": [h["slug"] for h in active],
+            "active_holiday": active[0]["slug"] if active else None,
+            "active_colors": active[0]["colors"] if active else [],
+            "active_details": active,
+            "upcoming": [],
+        }
 
     def _predict_rules(self, rules, provider_states, target_map) -> list[dict]:
         target_assignments: dict[str, dict] = {}
