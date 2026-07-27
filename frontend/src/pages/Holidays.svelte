@@ -91,11 +91,21 @@
   let editSlugForSuggest = $state('');
   let suggestions = $state([]);
 
+  function dayGap(fromIso, toIso) {
+    if (!fromIso || !toIso) return 0;
+    const ms = new Date(toIso + 'T00:00:00') - new Date(fromIso + 'T00:00:00');
+    return Math.max(0, Math.round(ms / 86400000));
+  }
+
   function startEdit(h) {
     editingSlug = h.slug;
     editColors = [...(h.colors || [])];
-    editWindowBefore = h.window_before_days ?? 0;
-    editWindowAfter = h.window_after_days ?? 0;
+    // window_before/after_days are only set when the user has overridden them.
+    // Falling back to 0 made the sliders misreport every built-in default
+    // window, and saving would then silently shrink it — Rosh Hashanah's three
+    // days would collapse to one. Derive from the real window instead.
+    editWindowBefore = h.window_before_days ?? dayGap(h.window_start, h.date);
+    editWindowAfter = h.window_after_days ?? dayGap(h.date, h.window_end);
     editPriority = h.priority ?? 50;
     editName = h.name;
     editSlugForSuggest = h.slug;
@@ -249,7 +259,7 @@
                   {#each suggestions as palette, i}
                     <button class="palette-option" onclick={() => applySuggestion(palette)}>
                       {#each palette as color}
-                        <span class="swatch" style="background: {color};"></span>
+                        <span class="swatch" style="background: {bulbPreview(color)}"></span>
                       {/each}
                     </button>
                   {/each}
