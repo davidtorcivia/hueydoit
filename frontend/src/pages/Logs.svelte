@@ -79,7 +79,8 @@
   <p>Loading...</p>
 {:else}
   <div class="log-container">
-    <table>
+    <div class="table-wrap">
+      <table>
       <thead>
         <tr>
           <th style="width: 170px;">Timestamp</th>
@@ -100,7 +101,8 @@
           </tr>
         {/each}
       </tbody>
-    </table>
+      </table>
+    </div>
 
     {#if logs.length === 0}
       <div class="empty-state">No logs found.</div>

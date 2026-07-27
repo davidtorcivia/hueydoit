@@ -201,6 +201,10 @@ def test_palette_hues_are_distinguishable(year):
         sats = [(_hsl(c)[0], c) for c in h["colors"] if _hsl(c)[1] > 0.5 and _hsl(c)[2] < 0.85]
         for i in range(len(sats)):
             for j in range(i + 1, len(sats)):
+                # Exact repeats are deliberate (palettes round-robin across
+                # lights), so only near-misses count. Mirrors paletteWarnings().
+                if sats[i][1].lower() == sats[j][1].lower():
+                    continue
                 delta = abs(sats[i][0] - sats[j][0]) % 360
                 if min(delta, 360 - delta) < 12:
                     offenders.append((h["slug"], sats[i][1], sats[j][1]))

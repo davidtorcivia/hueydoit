@@ -208,8 +208,38 @@
           <div class="holiday-window">Window: {h.window_start} — {h.window_end}</div>
         {/if}
 
-        {#if editingSlug === h.slug}
-          <div class="edit-panel mt-2">
+        <div class="holiday-colors-row">
+          {#if h.colors?.length}
+            <div class="strip" title={h.colors.join('  ')}>
+              {#each h.colors as color}
+                <span class="strip-seg" style="background: {bulbPreview(color)}"></span>
+              {/each}
+            </div>
+          {:else}
+            <span class="no-colours">No colours</span>
+          {/if}
+          <button class="small ghost edit-btn" onclick={() => startEdit(h)}>Edit</button>
+        </div>
+
+        {#if isActive(h)}
+          <span class="badge ok mt-2">Active Now</span>
+        {/if}
+        {#if h.category === 'custom'}
+          <button class="small danger mt-2" onclick={() => removeHoliday(h.id)}>Remove</button>
+        {/if}
+      </div>
+      {/each}
+    </div>
+  {/each}
+{/if}
+
+{#if editingSlug}
+  {@const editing = holidays.find((x) => x.slug === editingSlug)}
+  <div class="modal-overlay" onclick={cancelEdit} role="presentation">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <h2 class="mb-4">{editing?.name ?? 'Edit holiday'}</h2>
+      <div class="edit-panel">
+
             <div class="edit-section">
               <label class="edit-label">Colors</label>
               <ColorPicker colors={editColors} onChange={(c) => editColors = c} />
@@ -243,7 +273,7 @@
                 <input type="range" min="0" max="60" bind:value={editWindowAfter} />
               </div>
               <div class="window-preview">
-                Active: {windowPreview(h.date, editWindowBefore, editWindowAfter)}
+                Active: {windowPreview(editing.date, editWindowBefore, editWindowAfter)}
               </div>
             </div>
             <div class="edit-section">
@@ -255,35 +285,13 @@
               <input type="range" min="1" max="100" bind:value={editPriority} />
             </div>
             <div class="flex gap-2 mt-2">
-              <button class="small primary" onclick={() => saveConfig(h.slug)}>Save</button>
+              <button class="small primary" onclick={() => saveConfig(editingSlug)}>Save</button>
               <button class="small secondary" onclick={cancelEdit}>Cancel</button>
             </div>
-          </div>
-        {:else}
-          <div class="holiday-colors-row">
-            {#if h.colors?.length}
-              <div class="strip" title={h.colors.join('  ')}>
-                {#each h.colors as color}
-                  <span class="strip-seg" style="background: {bulbPreview(color)}"></span>
-                {/each}
-              </div>
-            {:else}
-              <span class="no-colors">No colours</span>
-            {/if}
-            <button class="small ghost edit-btn" onclick={() => startEdit(h)}>Edit</button>
-          </div>
-        {/if}
-
-        {#if isActive(h)}
-          <span class="badge ok mt-2">Active Now</span>
-        {/if}
-        {#if h.category === 'custom'}
-          <button class="small danger mt-2" onclick={() => removeHoliday(h.id)}>Remove</button>
-        {/if}
+          
       </div>
-      {/each}
     </div>
-  {/each}
+  </div>
 {/if}
 
 {#if showAdd}
@@ -356,7 +364,7 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
   .strip-seg { flex: 1; }
-  .no-colors { font-size: 12px; color: var(--text-muted); flex: 1; }
+  .no-colours { font-size: 12px; color: var(--text-muted); flex: 1; }
   .count {
     font-size: 11px; font-weight: 700; color: var(--text-muted);
     background: rgba(255,255,255,.06); padding: 1px 7px; border-radius: 999px;

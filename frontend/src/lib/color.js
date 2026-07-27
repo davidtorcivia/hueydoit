@@ -255,6 +255,10 @@ export function paletteWarnings(colors = []) {
 
   for (let a = 0; a < vivid.length; a++) {
     for (let b = a + 1; b < vivid.length; b++) {
+      // An exactly repeated colour is deliberate — palettes are round-robined
+      // across lights, so red/green/red is a real pattern, not a mistake. Only
+      // near-misses (different colour, same apparent hue) are worth flagging.
+      if (vivid[a].c.toLowerCase() === vivid[b].c.toLowerCase()) continue;
       const dist = hueDistance(vivid[a].hsl[0], vivid[b].hsl[0]);
       if (dist < MIN_HUE_SEPARATION) {
         warnings.push({

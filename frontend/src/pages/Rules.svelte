@@ -301,7 +301,8 @@
     </div>
   </div>
 {:else}
-  <table>
+  <div class="table-wrap">
+    <table>
     <thead>
       <tr>
         <th style="width: 40px;"></th>
@@ -355,7 +356,8 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+    </table>
+  </div>
 
   <div class="mt-4">
     <RuleTester />

@@ -42,6 +42,7 @@ export const api = {
   clearOverride: (target) => request('DELETE', `/api/override/${encodeURIComponent(target)}`),
 
   getHolidays: () => request('GET', '/api/holidays'),
+  getUpcomingHolidays: (limit = 8) => request('GET', `/api/holidays/upcoming?limit=${limit}`),
   addHoliday: (data) => request('POST', '/api/holidays', data),
   removeHoliday: (id) => request('DELETE', `/api/holidays/${id}`),
   updateHolidayConfig: (slug, data) => request('PUT', `/api/holidays/${encodeURIComponent(slug)}/config`, data),

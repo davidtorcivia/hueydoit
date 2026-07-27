@@ -6,6 +6,28 @@
   let hue = $state(0);
   let sat = $state(100);
   let popup = $state(null);
+  let swatchEl = $state(null);
+  // The popup lives inside modals and cards that set overflow, which clipped it.
+  // Fixed positioning escapes every ancestor scroll container; the trade-off is
+  // having to place it by hand and reposition when things scroll.
+  let pos = $state({ top: 0, left: 0 });
+
+  const POPUP_W = 224;
+  const POPUP_H = 250;
+
+  function place() {
+    if (!swatchEl) return;
+    const r = swatchEl.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const top = spaceBelow < POPUP_H && r.top > POPUP_H
+      ? r.top - POPUP_H - 8      // flip above when there's no room under it
+      : r.bottom + 8;
+    const left = Math.min(
+      Math.max(8, r.left),
+      Math.max(8, window.innerWidth - POPUP_W - 8),
+    );
+    pos = { top: Math.max(8, top), left };
+  }
 
   const presets = [
     '#ff0000', '#ff4400', '#ff8800', '#ffcc00', '#ccff00', '#44ff00',
@@ -24,6 +46,7 @@
       hue = h; sat = s;
     }
     open = !open;
+    if (open) place();
   }
 
   function pick(c) { onChange(c); open = false; }
@@ -35,11 +58,17 @@
       if (popup && !popup.contains(e.target) && !e.target.closest('.scp-swatch')) open = false;
     }
     function onKey(e) { if (e.key === 'Escape') open = false; }
+    // Any ancestor may scroll, so listen in the capture phase.
+    const reposition = () => place();
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
     return () => {
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
     };
   });
 </script>
@@ -49,12 +78,13 @@
     class="scp-swatch"
     style="background: {display(value)}"
     onclick={toggle}
+    bind:this={swatchEl}
     aria-label="Pick colour, currently {isCt(value) ? ctKelvin(value) + 'K' : value}"
     aria-expanded={open}
   ></button>
 
   {#if open}
-    <div class="scp-popup" bind:this={popup}>
+    <div class="scp-popup" bind:this={popup} style="top: {pos.top}px; left: {pos.left}px">
       <div class="scp-presets">
         {#each presets as p}
           <button class="scp-dot" style="background: {bulbPreview(p)}" onclick={() => pick(p)} aria-label={p}></button>
@@ -92,11 +122,11 @@
   }
   .scp-swatch:hover { border-color: var(--accent); transform: translateY(-1px); }
   .scp-popup {
-    position: absolute; top: 40px; left: 0; z-index: 100;
+    position: fixed; z-index: 1100;
     background: var(--bg-secondary); border: 1px solid var(--border-light);
     border-radius: var(--radius); padding: 12px;
     display: flex; flex-direction: column; gap: 9px;
-    min-width: 220px; box-shadow: 0 8px 28px rgba(0,0,0,.55);
+    width: 224px; box-shadow: 0 12px 32px rgba(0,0,0,.6);
   }
   .scp-presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
   .scp-dot {

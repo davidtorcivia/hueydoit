@@ -88,7 +88,8 @@
     <button class="primary mt-4" onclick={discoverBridge}>Discover Lights</button>
   </div>
 {:else}
-  <table>
+  <div class="table-wrap">
+    <table>
     <thead>
       <tr>
         <th>Name</th>
@@ -124,7 +125,8 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+    </table>
+  </div>
 {/if}
 
 {#if showBridge}

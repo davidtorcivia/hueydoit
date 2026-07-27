@@ -44,6 +44,50 @@ async def list_holidays():
     ]
 
 
+
+@router.get("/holidays/upcoming")
+async def upcoming_holidays(limit: int = 8, days: int = 400):
+    """The next holidays due, soonest first.
+
+    The holiday provider only surfaces a 30-day horizon for rule evaluation;
+    this answers "what's coming" over a longer window, and rolls into next year
+    so late-December doesn't show an empty list. Dates for weekday-defined
+    holidays are recomputed per year rather than year-shifted.
+    """
+    import zoneinfo
+    from datetime import datetime, timedelta
+
+    from app.config import settings
+    from app.holidays.loader import load_all_holidays, is_holiday_active
+
+    today = datetime.now(zoneinfo.ZoneInfo(settings.tz)).date()
+    horizon = today + timedelta(days=max(1, min(days, 800)))
+
+    seen: dict[str, dict] = {}
+    for year in (today.year, today.year + 1, today.year + 2):
+        for h in await load_all_holidays(year):
+            if not h.enabled or h.slug in seen:
+                continue
+            if h.date < today or h.date > horizon:
+                continue
+            seen[h.slug] = {
+                "name": h.name,
+                "slug": h.slug,
+                "date": h.date.isoformat(),
+                "days_until": (h.date - today).days,
+                "colors": h.colors,
+                "category": h.category,
+                "priority": h.priority,
+                "active": is_holiday_active(h, today),
+                "window_start": h.window_start.isoformat(),
+                "window_end": h.window_end.isoformat(),
+            }
+
+    # Tie-break on priority so that when two holidays share a date, the one
+    # that actually wins the lights is listed first.
+    ordered = sorted(seen.values(), key=lambda x: (x["days_until"], x["priority"]))
+    return ordered[: max(1, min(limit, 50))]
+
 @router.post("/holidays", status_code=201)
 async def add_holiday(holiday: HolidayCreate):
     async with get_db() as db:

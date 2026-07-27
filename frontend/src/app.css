@@ -325,8 +325,16 @@ input[type="color"] {
   appearance: auto;
 }
 
+/* Tables have no natural minimum, so at narrow widths they pushed the whole
+   page sideways instead of scrolling. Wrap every table in .table-wrap. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
 }
 th, td {

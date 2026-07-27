@@ -10,6 +10,7 @@
   let loading = $state(true);
   let pairMessage = $state('');
   let nextTrigger = $state(null);
+  let upcomingHolidays = $state([]);
 
   $effect(() => {
     loadStatus();
@@ -35,7 +36,8 @@
       }
     });
     // Refresh predictions every 60s
-    const interval = setInterval(loadNextTrigger, 60000);
+    loadUpcomingHolidays();
+    const interval = setInterval(() => { loadNextTrigger(); loadUpcomingHolidays(); }, 60000);
     return () => { unsub(); clearInterval(interval); };
   });
 
@@ -56,6 +58,29 @@
     } catch (e) {
       console.error('Failed to load next trigger:', e);
     }
+  }
+
+  async function loadUpcomingHolidays() {
+    try {
+      upcomingHolidays = await api.getUpcomingHolidays(8);
+    } catch (e) {
+      console.error('Failed to load upcoming holidays:', e);
+    }
+  }
+
+  function holidayWhen(h) {
+    if (h.active) return 'Active now';
+    if (h.days_until === 0) return 'Today';
+    if (h.days_until === 1) return 'Tomorrow';
+    if (h.days_until < 7) return `in ${h.days_until} days`;
+    if (h.days_until < 14) return 'next week';
+    if (h.days_until < 60) return `in ${Math.round(h.days_until / 7)} weeks`;
+    return `in ${Math.round(h.days_until / 30)} months`;
+  }
+
+  function holidayDate(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
   function formatTime(isoStr) {
@@ -192,6 +217,34 @@
     </div>
   {/if}
 
+  <div class="section-title"><h2>Upcoming Holidays</h2></div>
+  {#if upcomingHolidays.length === 0}
+    <div class="card empty-state">Nothing scheduled in the next year.</div>
+  {:else}
+    <div class="holiday-queue card">
+      {#each upcomingHolidays as h, i}
+        <div class="hq-row" class:is-active={h.active}>
+          <div class="hq-when">
+            <span class="hq-rel">{holidayWhen(h)}</span>
+            <span class="hq-date">{holidayDate(h.date)}</span>
+          </div>
+          <div class="hq-strip" title={h.colors.join('  ')}>
+            {#each h.colors as c}
+              <span style="background: {bulbPreview(c)}"></span>
+            {/each}
+          </div>
+          <div class="hq-name">
+            {h.name}
+            {#if i > 0 && upcomingHolidays[i - 1].date === h.date}
+              <span class="hq-note" title="Shares a date with {upcomingHolidays[i - 1].name}, which has higher priority">overridden</span>
+            {/if}
+          </div>
+          <span class="badge neutral hq-cat">{h.category.replace('_', ' ')}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <div class="section-title"><h2>Providers</h2></div>
   <div class="grid grid-3">
     {#each providers as provider (provider.name)}
@@ -201,6 +254,37 @@
 {/if}
 
 <style>
+  .holiday-queue { display: flex; flex-direction: column; padding: 0; }
+  .hq-row {
+    display: grid;
+    grid-template-columns: 104px 68px 1fr auto;
+    align-items: center; gap: var(--space-3);
+    padding: 11px var(--space-4);
+    border-bottom: 1px solid var(--border);
+  }
+  .hq-row:last-child { border-bottom: none; }
+  .hq-row.is-active { background: rgba(52, 208, 127, .07); }
+  .hq-when { display: flex; flex-direction: column; line-height: 1.3; }
+  .hq-rel { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .hq-row.is-active .hq-rel { color: var(--success); }
+  .hq-date { font-size: 11px; color: var(--text-muted); }
+  .hq-strip {
+    display: flex; height: 20px; border-radius: 5px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.14);
+  }
+  .hq-strip span { flex: 1; }
+  .hq-name { font-size: 14px; color: var(--text-primary); }
+  .hq-note {
+    font-size: 10px; color: var(--text-muted); border: 1px solid var(--border-light);
+    border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle;
+  }
+  .hq-cat { text-transform: capitalize; }
+
+  @media (max-width: 640px) {
+    .hq-row { grid-template-columns: 92px 1fr; row-gap: 6px; }
+    .hq-cat { display: none; }
+  }
+
   .all-off {
     display: flex; align-items: center; gap: 9px;
     font-size: 13px; color: var(--text-muted); padding: 6px 0;
