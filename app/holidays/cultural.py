@@ -26,13 +26,36 @@ def _easter(year: int) -> date:
     return date(year, month, day + 1)
 
 
+def _hijri_event(year: int, hijri_month: int, hijri_day: int) -> date | None:
+    """Gregorian date of a Hijri calendar event falling in the given Gregorian year.
+
+    Hijri years are ~354 days, so they drift against the Gregorian calendar by
+    roughly one year every 33. The mapping is therefore h ~= (g - 622) * 33/32,
+    not the naive (g - 622) — searching the naive range lands ~43 years early
+    and never matches, which silently disabled this path entirely.
+
+    Returns None if hijri-converter is unavailable or the year is outside the
+    range it supports, so callers can fall back to a lookup table.
+    """
+    try:
+        from hijri_converter import Hijri
+    except ImportError:
+        logger.warning("hijri-converter not installed, using approximate dates")
+        return None
+
+    approx = round((year - 622) * 33 / 32)
+    for hijri_year in range(approx - 1, approx + 2):
+        try:
+            g = Hijri(hijri_year, hijri_month, hijri_day).to_gregorian()
+        except (ValueError, OverflowError):
+            continue
+        if g.year == year:
+            return date(g.year, g.month, g.day)
+    return None
+
+
 def _hanukkah_start(year: int) -> date:
     """Approximate Hanukkah start (25 Kislev). Uses a lookup-style approximation."""
-    try:
-        from hijri_converter import Hijri, Gregorian
-    except ImportError:
-        pass
-
     known = {
         2024: date(2024, 12, 25),
         2025: date(2025, 12, 14),
@@ -80,20 +103,10 @@ def _lunar_new_year(year: int) -> date:
 
 
 def _eid_al_fitr(year: int) -> date:
-    """Compute approximate Eid al-Fitr using hijri-converter."""
-    try:
-        from hijri_converter import Hijri, Gregorian
-
-        for hijri_year in range(year - 622 + 1, year - 622 + 3):
-            try:
-                h = Hijri(hijri_year, 10, 1)
-                g = h.to_gregorian()
-                if g.year == year:
-                    return g
-            except Exception:
-                continue
-    except ImportError:
-        logger.warning("hijri-converter not installed, using approximate Eid dates")
+    """Eid al-Fitr — 1 Shawwal (Hijri month 10)."""
+    computed = _hijri_event(year, 10, 1)
+    if computed:
+        return computed
 
     known = {
         2024: date(2024, 4, 10),
@@ -108,20 +121,10 @@ def _eid_al_fitr(year: int) -> date:
 
 
 def _eid_al_adha(year: int) -> date:
-    """Compute approximate Eid al-Adha using hijri-converter."""
-    try:
-        from hijri_converter import Hijri, Gregorian
-
-        for hijri_year in range(year - 622 + 1, year - 622 + 3):
-            try:
-                h = Hijri(hijri_year, 12, 10)
-                g = h.to_gregorian()
-                if g.year == year:
-                    return g
-            except Exception:
-                continue
-    except ImportError:
-        logger.warning("hijri-converter not installed, using approximate Eid dates")
+    """Eid al-Adha — 10 Dhu al-Hijjah (Hijri month 12)."""
+    computed = _hijri_event(year, 12, 10)
+    if computed:
+        return computed
 
     known = {
         2024: date(2024, 6, 17),

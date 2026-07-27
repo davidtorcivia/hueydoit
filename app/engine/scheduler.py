@@ -19,7 +19,7 @@ from app.providers.webhook import WebhookProvider
 from app.providers.time_provider import TimeProvider
 from app.providers.calendar_provider import CalendarProvider
 from app.ws import ws_manager
-from app.database import add_log, get_db
+from app.database import add_log, get_db, prune_logs
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,14 @@ class EngineScheduler:
             replace_existing=True,
         )
 
+        self._scheduler.add_job(
+            prune_logs,
+            CronTrigger(hour=4, minute=15),
+            id="prune_logs",
+            name="Prune old log rows",
+            replace_existing=True,
+        )
+
         self._breathe_phase = False
         self._scheduler.add_job(
             self._breathe_loop,
@@ -87,6 +95,11 @@ class EngineScheduler:
 
         self._scheduler.start()
         logger.info("Scheduler started with %d providers", len(self._providers))
+
+        try:
+            await prune_logs()
+        except Exception as e:
+            logger.error("Initial log prune failed: %s", e)
 
         for provider in self._providers.values():
             try:

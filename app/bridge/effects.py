@@ -4,6 +4,57 @@ import math
 logger = logging.getLogger(__name__)
 
 
+# Philips Hue Gamut C — the widest of the three, covering the colour-capable
+# strip/bulb families. Clamping here means the xy we send is already inside the
+# bulb's triangle, so the colour it renders matches what the UI previews instead
+# of being silently clipped somewhere in the bridge.
+GAMUT_C = ((0.6915, 0.3038), (0.1700, 0.7000), (0.1532, 0.0475))  # red, green, blue
+
+
+def _closest_point_on_segment(a, b, p):
+    ax, ay = a
+    bx, by = b
+    px, py = p
+    abx, aby = bx - ax, by - ay
+    denom = abx * abx + aby * aby
+    if denom == 0:
+        return a
+    t = ((px - ax) * abx + (py - ay) * aby) / denom
+    t = max(0.0, min(1.0, t))
+    return (ax + abx * t, ay + aby * t)
+
+
+def clamp_xy_to_gamut(x: float, y: float, gamut=GAMUT_C) -> tuple[float, float]:
+    """Clamp an xy chromaticity into the bulb's reproducible triangle."""
+    r, g, b = gamut
+
+    def sign(p1, p2, p3):
+        return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+
+    p = (x, y)
+    d1, d2, d3 = sign(p, r, g), sign(p, g, b), sign(p, b, r)
+    has_neg = d1 < 0 or d2 < 0 or d3 < 0
+    has_pos = d1 > 0 or d2 > 0 or d3 > 0
+    if not (has_neg and has_pos):
+        return (round(x, 4), round(y, 4))  # already inside
+
+    candidates = [
+        _closest_point_on_segment(r, g, p),
+        _closest_point_on_segment(g, b, p),
+        _closest_point_on_segment(b, r, p),
+    ]
+    best = min(candidates, key=lambda c: (c[0] - x) ** 2 + (c[1] - y) ** 2)
+
+    # Rounding an edge point to the 4 decimals the Hue API takes can push it back
+    # outside the triangle, so pull it a hair toward the centre first. The shift is
+    # ~3e-4 in xy — well below any visible difference, well above rounding error.
+    cx = (r[0] + g[0] + b[0]) / 3
+    cy = (r[1] + g[1] + b[1]) / 3
+    bx = best[0] + (cx - best[0]) * 1e-3
+    by = best[1] + (cy - best[1]) * 1e-3
+    return (round(bx, 4), round(by, 4))
+
+
 def hex_to_xy(hex_color: str) -> tuple[float, float]:
     hex_color = hex_color.lstrip("#")
     r = int(hex_color[0:2], 16) / 255.0
@@ -22,7 +73,7 @@ def hex_to_xy(hex_color: str) -> tuple[float, float]:
     if total == 0:
         return (0.3127, 0.3290)
 
-    return (round(x / total, 4), round(y / total, 4))
+    return clamp_xy_to_gamut(x / total, y / total)
 
 
 def xy_to_hex(x: float, y: float, brightness: float = 1.0) -> str:

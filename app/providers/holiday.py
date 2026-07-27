@@ -4,7 +4,7 @@ import zoneinfo
 
 from app.config import settings
 from app.providers.base import Provider, ScheduleConfig
-from app.holidays.loader import load_all_holidays, is_holiday_active
+from app.holidays.loader import load_all_holidays, is_holiday_active, shift_year
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,12 @@ class HolidayProvider(Provider):
         today = now.date()
 
         holidays = await load_all_holidays(today.year)
+
+        # Holidays defined by a weekday rule (3rd Monday of January, ...) land on a
+        # different day each year, so a next-year occurrence has to be recomputed
+        # rather than year-shifted. Without this, every nth-weekday holiday shows
+        # the wrong "upcoming" date each December.
+        next_year_dates = {h.slug: h.date for h in await load_all_holidays(today.year + 1)}
 
         active = []
         upcoming = []
@@ -34,9 +40,11 @@ class HolidayProvider(Provider):
             else:
                 h_date = h.date
                 if h.recurring:
-                    h_date = h_date.replace(year=today.year)
+                    h_date = shift_year(h_date, today.year)
                     if h_date < today:
-                        h_date = h_date.replace(year=today.year + 1)
+                        h_date = next_year_dates.get(
+                            h.slug, shift_year(h_date, today.year + 1)
+                        )
                 days_until = (h_date - today).days
                 if 0 < days_until <= 30:
                     upcoming.append({

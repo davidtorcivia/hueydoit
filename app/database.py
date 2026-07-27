@@ -162,6 +162,35 @@ async def get_db():
         await db.close()
 
 
+async def prune_logs(retain_days: int | None = None, max_rows: int | None = None) -> int:
+    """Drop old log rows. Returns the number deleted.
+
+    The logs table had no retention at all and grew unbounded (54k rows in four
+    months). Trims by age first, then enforces a hard row cap as a backstop.
+    """
+    retain_days = retain_days if retain_days is not None else settings.log_retention_days
+    max_rows = max_rows if max_rows is not None else settings.log_max_rows
+
+    async with get_db() as db:
+        cursor = await db.execute(
+            "DELETE FROM logs WHERE timestamp < datetime('now', ?)",
+            (f"-{int(retain_days)} days",),
+        )
+        deleted = cursor.rowcount or 0
+
+        cursor = await db.execute(
+            "DELETE FROM logs WHERE id NOT IN "
+            "(SELECT id FROM logs ORDER BY id DESC LIMIT ?)",
+            (int(max_rows),),
+        )
+        deleted += cursor.rowcount or 0
+        await db.commit()
+
+    if deleted:
+        logger.info("Pruned %d log rows (retain %dd, cap %d)", deleted, retain_days, max_rows)
+    return deleted
+
+
 async def add_log(level: str, source: str, message: str, details: dict | None = None):
     async with get_db() as db:
         await db.execute(

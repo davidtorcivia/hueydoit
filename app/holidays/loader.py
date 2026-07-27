@@ -37,14 +37,27 @@ class Holiday:
     priority: int = 50
 
 
+def shift_year(d: date, year: int) -> date:
+    """Move a date to another year, tolerating Feb 29.
+
+    date.replace(year=...) raises ValueError for Feb 29 in a non-leap year,
+    which would take down the whole holiday provider for any leap-day holiday
+    in 3 years out of 4. Fall back to Feb 28.
+    """
+    try:
+        return d.replace(year=year)
+    except ValueError:
+        return d.replace(year=year, day=28)
+
+
 def is_holiday_active(holiday: Holiday, check_date: date) -> bool:
     if not holiday.enabled:
         return False
     start = holiday.window_start
     end = holiday.window_end
     if holiday.recurring:
-        start = start.replace(year=check_date.year)
-        end = end.replace(year=check_date.year)
+        start = shift_year(start, check_date.year)
+        end = shift_year(end, check_date.year)
         if start > end:
             return check_date >= start or check_date <= end
     return start <= check_date <= end
