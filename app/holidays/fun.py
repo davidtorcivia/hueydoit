@@ -172,6 +172,17 @@ def get_fun_holidays(year: int) -> list[dict]:
             "colors": ["#ffcc00", "#ff6600", "#00cc00"],
             "category": "fun",
         },
+        # NYC Marathon — first Sunday of November
+        {
+            "name": "NYC Marathon",
+            "slug": "nyc_marathon",
+            "date": _nth_weekday(year, 11, 6, 1),
+            "window_start": _nth_weekday(year, 11, 6, 1),
+            "window_end": _nth_weekday(year, 11, 6, 1),
+            # NYRR blue, road-cone orange, finisher's medal.
+            "colors": ["#0088ff", "#ff5500", "#ffee00"],
+            "category": "fun",
+        },
         # Festivus
         {
             "name": "Festivus",
@@ -179,7 +190,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 12, 23),
             "window_start": date(year, 12, 23),
             "window_end": date(year, 12, 23),
-            "colors": ["#cce6ff", "#ffffff", "#ffeedd"],
+            "colors": ["#cce6ff", "#ffffff", "#ff0033"],  # aluminium pole, plus the airing of grievances
             "category": "fun",
         },
         # New Year's Eve

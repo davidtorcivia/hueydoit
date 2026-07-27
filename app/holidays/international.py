@@ -1,7 +1,7 @@
 import logging
 from datetime import date, timedelta
 
-from app.holidays.cultural import _easter
+from app.holidays.cultural import _easter, _nowruz
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,10 @@ def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
     offset = (weekday - first.weekday()) % 7
     return first + timedelta(days=offset + 7 * (n - 1))
 
+
+
+def _first_weekday(year: int, month: int, weekday: int) -> date:
+    return _nth_weekday(year, month, weekday, 1)
 
 def get_international_holidays(year: int) -> list[dict]:
     easter = _easter(year)
@@ -44,6 +48,46 @@ def get_international_holidays(year: int) -> list[dict]:
             "window_start": _holi(year),
             "window_end": _holi(year) + timedelta(days=1),
             "colors": ["#ff0066", "#ffcc00", "#00ccff", "#88ff00", "#ff6600", "#cc00ff"],
+            "category": "international",
+        },
+        {
+            "name": "Nowruz",
+            "slug": "nowruz",
+            "date": _nowruz(year),
+            "window_start": _nowruz(year),
+            "window_end": _nowruz(year) + timedelta(days=1),
+            # Haft-sin green, gold, and blossom.
+            "colors": ["#00e5a0", "#ffd700", "#ff3399"],
+            "category": "international",
+        },
+        {
+            "name": "Puerto Rican Day Parade",
+            "slug": "puerto_rican_day",
+            "date": _nth_weekday(year, 6, 6, 2),
+            "window_start": _nth_weekday(year, 6, 6, 2),
+            "window_end": _nth_weekday(year, 6, 6, 2),
+            # Puerto Rican flag — a lighter blue than the US flag palettes.
+            "colors": ["#ff0033", "#ffffff", "#00a0ff"],
+            "category": "international",
+        },
+        {
+            "name": "West Indian Day Carnival",
+            "slug": "west_indian_carnival",
+            "date": _nth_weekday(year, 9, 0, 1),
+            "window_start": _nth_weekday(year, 9, 0, 1),
+            "window_end": _nth_weekday(year, 9, 0, 1),
+            # Eastern Parkway on Labor Day — full carnival spread.
+            "colors": ["#00cc44", "#ffcc00", "#ff0033", "#00d0ff", "#cc00ff"],
+            "category": "international",
+        },
+        {
+            "name": "World AIDS Day",
+            "slug": "world_aids_day",
+            "date": date(year, 12, 1),
+            "window_start": date(year, 12, 1),
+            "window_end": date(year, 12, 1),
+            # Red ribbon, with violet for remembrance.
+            "colors": ["#ff0022", "#ffffff", "#8800ff"],
             "category": "international",
         },
         # Earth Day

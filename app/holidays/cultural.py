@@ -201,6 +201,63 @@ def _eid_al_adha(year: int) -> date:
     return known.get(year, date(year, 6, 15))
 
 
+
+def _hebrew_eve(year: int, hebrew_month: int, hebrew_day: int, year_offset: int = 3761) -> date | None:
+    """Gregorian date of the *eve* of a Hebrew calendar date.
+
+    Jewish days begin at sunset, so the observance starts the evening before —
+    which is the day that matters for lights. Tishri falls at the start of the
+    Hebrew year (offset 3761); Nisan is in the second half (offset 3760).
+    """
+    try:
+        from convertdate import hebrew
+
+        return date(*hebrew.to_gregorian(year + year_offset, hebrew_month, hebrew_day)) - timedelta(days=1)
+    except Exception as e:
+        logger.warning("Hebrew date %s/%s for %s failed: %s", hebrew_month, hebrew_day, year, e)
+        return None
+
+
+def _rosh_hashanah(year: int) -> date:
+    from convertdate import hebrew
+
+    return _hebrew_eve(year, hebrew.TISHRI, 1) or date(year, 9, 15)
+
+
+def _yom_kippur(year: int) -> date:
+    from convertdate import hebrew
+
+    return _hebrew_eve(year, hebrew.TISHRI, 10) or date(year, 9, 24)
+
+
+def _passover(year: int) -> date:
+    from convertdate import hebrew
+
+    return _hebrew_eve(year, hebrew.NISAN, 15, year_offset=3760) or date(year, 4, 10)
+
+
+def _ramadan_start(year: int) -> date:
+    """First day of Ramadan — 1 Ramadan (Hijri month 9)."""
+    return _hijri_event(year, 9, 1) or date(year, 3, 1)
+
+
+def _nowruz(year: int) -> date:
+    """Persian New Year — 1 Farvardin."""
+    try:
+        from convertdate import persian
+
+        return date(*persian.to_gregorian(year - 621, 1, 1))
+    except Exception as e:
+        logger.warning("Nowruz computation failed for %s: %s", year, e)
+        return date(year, 3, 20)
+
+
+def _election_day(year: int) -> date:
+    """US general election — the Tuesday after the first Monday in November."""
+    first_monday = _nth_weekday(year, 11, 0, 1)
+    return first_monday + timedelta(days=1)
+
+
 def get_cultural_holidays(year: int) -> list[dict]:
     easter = _easter(year)
 
@@ -256,7 +313,7 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": _eid_al_fitr(year),
             "window_start": _eid_al_fitr(year) - timedelta(days=1),
             "window_end": _eid_al_fitr(year) + timedelta(days=2),
-            "colors": ["#00ff00", "#ffd700", "#ffffff"],
+            "colors": ["#00ff44", "#ffd700", "#ffffff"],
             "category": "cultural",
         },
         {
@@ -265,7 +322,72 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": _eid_al_adha(year),
             "window_start": _eid_al_adha(year) - timedelta(days=1),
             "window_end": _eid_al_adha(year) + timedelta(days=2),
-            "colors": ["#00ff00", "#ffd700", "#ffffff"],
+            # Deeper green and the blue of the pilgrimage, so the Feast of
+            # Sacrifice doesn't look identical to Eid al-Fitr.
+            "colors": ["#00cc66", "#ffffff", "#0055ff"],
+            "category": "cultural",
+        },
+        {
+            "name": "Three Kings Day",
+            "slug": "three_kings_day",
+            "date": date(year, 1, 6),
+            "window_start": date(year, 1, 5),
+            "window_end": date(year, 1, 6),
+            # Gold, frankincense and myrrh — gift gold, royal purple, resin green.
+            "colors": ["#ffd700", "#8800ff", "#00cc66"],
+            "category": "cultural",
+        },
+        {
+            "name": "Rosh Hashanah",
+            "slug": "rosh_hashanah",
+            "date": _rosh_hashanah(year),
+            "window_start": _rosh_hashanah(year),
+            "window_end": _rosh_hashanah(year) + timedelta(days=2),
+            # Apples and honey.
+            "colors": ["#ffb300", "#e0004d", "#ffeedd"],
+            "category": "cultural",
+        },
+        {
+            "name": "Yom Kippur",
+            "slug": "yom_kippur",
+            "date": _yom_kippur(year),
+            "window_start": _yom_kippur(year),
+            "window_end": _yom_kippur(year) + timedelta(days=1),
+            # Deliberately colourless — white is the colour of the day. Cool,
+            # neutral and warm whites are the one white trio a bulb can tell apart.
+            "colors": ["#cce6ff", "#ffffff", "#ffeedd"],
+            "category": "cultural",
+        },
+        {
+            "name": "Passover",
+            "slug": "passover",
+            "date": _passover(year),
+            "window_start": _passover(year),
+            "window_end": _passover(year) + timedelta(days=2),
+            # Seder plate: matzah gold, bitter herbs, wine.
+            "colors": ["#ffcc00", "#00cc44", "#cc0033"],
+            "category": "cultural",
+        },
+        {
+            "name": "Ramadan",
+            "slug": "ramadan",
+            "date": _ramadan_start(year),
+            "window_start": _ramadan_start(year) - timedelta(days=1),
+            "window_end": _ramadan_start(year) + timedelta(days=2),
+            # Lantern gold against a night sky. Window covers the first nights
+            # rather than the whole month so it doesn't sit on top of everything
+            # else for four weeks — widen it in the UI if you want the full month.
+            "colors": ["#00cc66", "#ffd700", "#7700ff"],
+            "category": "cultural",
+        },
+        {
+            "name": "Election Day",
+            "slug": "election_day",
+            "date": _election_day(year),
+            "window_start": _election_day(year),
+            "window_end": _election_day(year),
+            # Patriotic but softer than the flag palettes, so it reads as civic.
+            "colors": ["#e0004d", "#ffeedd", "#2266ff"],
             "category": "cultural",
         },
         {

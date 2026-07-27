@@ -44,7 +44,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": _nth_weekday(year, 2, 0, 3),
             "window_start": _nth_weekday(year, 2, 0, 3) - timedelta(days=1),
             "window_end": _nth_weekday(year, 2, 0, 3),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0022", "#ffffff", "#ffd700"],  # gold of the presidential seal
             "category": "us_federal",
         },
         {
@@ -53,7 +53,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": _last_weekday(year, 5, 0),
             "window_start": _last_weekday(year, 5, 0) - timedelta(days=1),
             "window_end": _last_weekday(year, 5, 0),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0022", "#ffffff", "#00cc44"],  # poppy red and laurel green
             "category": "us_federal",
         },
         {
@@ -71,7 +71,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": date(year, 7, 4),
             "window_start": date(year, 7, 1),
             "window_end": date(year, 7, 4),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0000", "#ffffff", "#0000ff"],  # the flag, untouched
             "category": "us_federal",
         },
         {
@@ -80,7 +80,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": _nth_weekday(year, 9, 0, 1),
             "window_start": _nth_weekday(year, 9, 0, 1) - timedelta(days=1),
             "window_end": _nth_weekday(year, 9, 0, 1),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0022", "#ffffff", "#ff8800"],  # amber for industry
             "category": "us_federal",
         },
         {
@@ -89,7 +89,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": _nth_weekday(year, 10, 0, 2),
             "window_start": _nth_weekday(year, 10, 0, 2) - timedelta(days=1),
             "window_end": _nth_weekday(year, 10, 0, 2),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0000", "#ffffff", "#00cc00"],  # Italian tricolour
             "category": "us_federal",
         },
         {
@@ -98,7 +98,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": date(year, 11, 11),
             "window_start": date(year, 11, 10),
             "window_end": date(year, 11, 11),
-            "colors": ["#ff0000", "#ffffff", "#0000ff"],
+            "colors": ["#ff0022", "#ffffff", "#7700ff"],  # violet for the Purple Heart
             "category": "us_federal",
         },
         {
