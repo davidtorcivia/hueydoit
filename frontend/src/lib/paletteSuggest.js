@@ -12,7 +12,7 @@
 
 const HOLIDAY_PALETTES = {
   // US Federal
-  new_years:        [['#ffd700', '#ff00ff', '#00ffff'], ['#ffd700', '#ff1493', '#7b68ee'], ['#ffeedd', '#ffd700', '#ff6600']],
+  new_years:        [['#ffd700', '#ffeedd', '#00d0ff'], ['#ffd700', '#ff00ff', '#00ffff'], ['#ffeedd', '#ffd700', '#ff6600']],
   mlk_day:          [['#ff0000', '#ffd700', '#00cc00'], ['#ff4500', '#ffeedd', '#22cc22'], ['#e63946', '#ffd700', '#2ec4b6']],
   presidents_day:   [['#ff0000', '#ffeedd', '#4488ff'], ['#e63946', '#ffeedd', '#1d9bf0'], ['#ff3355', '#ffeedd', '#6699ff']],
   memorial_day:     [['#ff0000', '#ffeedd', '#4488ff'], ['#ff3355', '#ffeedd', '#5588ee'], ['#e63946', '#ffeedd', '#1d9bf0']],
@@ -21,18 +21,20 @@ const HOLIDAY_PALETTES = {
   labor_day:        [['#ff0000', '#ffeedd', '#4488ff'], ['#ff6600', '#ffeedd', '#5588ee']],
   columbus_day:     [['#ff0000', '#ffeedd', '#4488ff'], ['#ff6600', '#22cc22', '#ffd700']],
   veterans_day:     [['#ff0000', '#ffeedd', '#4488ff'], ['#cc0000', '#ffeedd', '#3366cc']],
-  thanksgiving:     [['#ff6600', '#ffd700', '#ff4500'], ['#ff8c00', '#ffcc00', '#ff5500'], ['#ffa500', '#ffdd44', '#ff6622']],
+  thanksgiving:     [['#ff8c00', '#ffcc00', '#b3001b'], ['#ffb300', '#ffee00', '#e63200'], ['#ff6600', '#ffd700', '#9e0022']],
   christmas:        [['#ff0000', '#00cc00', '#ffeedd'], ['#cc0000', '#22cc22', '#ffd700'], ['#ff2200', '#00ee44', '#ffeedd', '#ffd700']],
 
   // Cultural
-  valentines_day:   [['#ff1493', '#ff69b4', '#ff0055'], ['#ff007f', '#ff69b4', '#ff4488'], ['#ff1493', '#ff6eb4', '#ff00aa']],
-  st_patricks_day:  [['#00ff00', '#00cc44', '#ffeedd'], ['#22dd22', '#00ee66', '#44ff88'], ['#00ff00', '#00cc00', '#88ff44']],
+  valentines_day:   [['#ff0033', '#ff69b4', '#ffeedd'], ['#ff0055', '#ff4d9e', '#cc00ff'], ['#ff1493', '#ff6eb4', '#ff00aa']],
+  st_patricks_day:  [['#00ff33', '#88ff00', '#ffd700'], ['#22dd22', '#00ee66', '#44ff88'], ['#00ff00', '#ccff00', '#ffeedd']],
   easter:           [['#ff69b4', '#ffff00', '#87ceeb', '#90ee90'], ['#ff8ec4', '#ffee55', '#66ccff', '#88ee88'], ['#ff77bb', '#ffdd44', '#55bbff', '#77ee77']],
   eid_al_fitr:      [['#00ff00', '#ffd700', '#ffeedd'], ['#22dd44', '#ffcc00', '#ffeedd'], ['#00ee66', '#ffd700', '#55ccff']],
   eid_al_adha:      [['#00ff00', '#ffd700', '#ffeedd'], ['#22dd44', '#ffcc00', '#55ccff'], ['#00ee66', '#ffd700', '#ffeedd']],
+  mothers_day:      [['#ff69b4', '#cc66ff', '#ffeedd'], ['#ff3388', '#aa44ff', '#ffd700']],
+  fathers_day:      [['#0088ff', '#00d0ff', '#ffd700'], ['#0055ff', '#44ccff', '#ffcc00']],
   halloween:        [['#ff6600', '#aa00ff', '#00ff00'], ['#ff5500', '#9900ff', '#44ff00'], ['#ff8800', '#cc00ff', '#00ff66']],
   diwali:           [['#ffd700', '#ff6600', '#ff0066'], ['#ffcc00', '#ff5500', '#ff00aa'], ['#ffd700', '#ff4500', '#ff1493']],
-  hanukkah:         [['#4488ff', '#ffeedd', '#66aaff'], ['#3377ee', '#ffeedd', '#88bbff'], ['#5599ff', '#ffd700', '#ffeedd']],
+  hanukkah:         [['#0055ff', '#ffeedd', '#00d0ff'], ['#3377ee', '#ffeedd', '#ffd700'], ['#0044cc', '#ffffff', '#44ccff']],
   lunar_new_year:   [['#ff0000', '#ffd700', '#ff6600'], ['#ee0000', '#ffcc00', '#ff5500'], ['#ff2200', '#ffd700', '#ff3388']],
 
   // International
@@ -45,24 +47,34 @@ const HOLIDAY_PALETTES = {
   oktoberfest:      [['#0088ff', '#ffffff', '#ffd700'], ['#4499ff', '#ffeedd', '#ffcc00']],
   day_of_the_dead:  [['#ff6600', '#ff00ff', '#ffcc00', '#00ffcc'], ['#ff5500', '#cc00ff', '#ffd700']],
   guy_fawkes:       [['#ff4400', '#ff8800', '#ffd700'], ['#ff6600', '#ffaa00', '#ffee44']],
-  kwanzaa:          [['#ff0000', '#00cc00', '#ffeedd'], ['#ee0000', '#22dd22', '#ffd700']],
+  kwanzaa:          [['#ff0000', '#00cc00', '#ffd700'], ['#ee0000', '#22dd22', '#ffeedd']],
 
   // Fun
   pi_day:           [['#4488ff', '#ffcc00', '#ff4488'], ['#5599ff', '#ffdd44', '#ff5599']],
   april_fools:      [['#ff00ff', '#00ffff', '#ffff00'], ['#ff44ff', '#44ffff', '#ffff44']],
   star_wars_day:    [['#0044ff', '#ff0000', '#00ff00'], ['#0066ff', '#ff2200', '#22ff22']],
   pride_month:      [['#ff0000', '#ff8800', '#ffff00', '#00cc00', '#0000ff', '#cc00ff']],
-  pirate_day:       [['#ffd700', '#ff0000', '#ffeedd'], ['#ffcc00', '#ff2200', '#ffeedd']],
-  festivus:         [['#c0c0c0', '#808080', '#ffeedd'], ['#aaaaaa', '#666666', '#ffeedd']],
+  pirate_day:       [['#ffd700', '#ff2200', '#0088ff'], ['#ffcc00', '#ff0044', '#00d0ff']],
+  festivus:         [['#cce6ff', '#ffffff', '#ffeedd'], ['#aaddff', '#ffffff', '#ffd700']],
   new_years_eve:    [['#ffd700', '#ff00ff', '#00ffff', '#ffeedd'], ['#ffcc00', '#ff44ff', '#44ffff']],
   super_bowl:       [['#ffd700', '#0088ff', '#ff0000'], ['#ffcc00', '#4499ff', '#ff3333']],
   '420':            [['#00cc00', '#88ff00', '#44ff00'], ['#22dd22', '#66ff00', '#00ff44']],
 
+  groundhog_day:    [['#ffaa00', '#00cc44', '#ffeedd'], ['#ffcc00', '#22dd22', '#cce6ff']],
+  pizza_day:        [['#ff2200', '#ffcc00', '#00cc44'], ['#ff0000', '#ffd700', '#88ff00']],
+  donut_day:        [['#ff69b4', '#ffcc00', '#00d0ff'], ['#ff88cc', '#ffee00', '#aa44ff']],
+  emoji_day:        [['#ffcc00', '#ff4444', '#4488ff'], ['#ffee00', '#ff0066', '#00d0ff']],
+  ice_cream_day:    [['#ff69b4', '#ffeedd', '#00e5a0'], ['#ff88cc', '#ffee00', '#00d0ff']],
+  cat_day:          [['#ff8800', '#ffeedd', '#00d0ff'], ['#ffaa00', '#ffffff', '#00ff88']],
+  coffee_day:       [['#ff6a00', '#ffcc00', '#ffeedd'], ['#ff8800', '#ffd700', '#cce6ff']],
+  taco_day:         [['#ffcc00', '#ff6600', '#00cc00'], ['#ffee00', '#ff2200', '#22dd22']],
+  friday_13:        [['#ff0011', '#7700ff', '#00ff44'], ['#cc0022', '#aa00ff', '#00ffaa']],
+
   // Seasonal
   spring_equinox:   [['#00ff88', '#ffcc00', '#ff69b4'], ['#44ffaa', '#ffdd44', '#ff88cc']],
-  summer_solstice:  [['#ffcc00', '#ff6600', '#ff0000'], ['#ffdd44', '#ff7722', '#ff2200']],
-  fall_equinox:     [['#ff6600', '#ff4400', '#ffd700'], ['#ff7722', '#ff5500', '#ffcc00']],
-  winter_solstice:  [['#88bbff', '#ffeedd', '#aaddff'], ['#6699ff', '#ffeedd', '#88ccff']],
+  summer_solstice:  [['#ffe600', '#ff7a00', '#ff0099'], ['#ffcc00', '#ff6600', '#ff0000']],
+  fall_equinox:     [['#ffb300', '#e63200', '#9e0022'], ['#ffcc00', '#ff5500', '#cc0022']],
+  winter_solstice:  [['#0066ff', '#ffeedd', '#00d0ff'], ['#0044ff', '#ffffff', '#00ccff']],
 };
 
 /**
@@ -157,6 +169,12 @@ export function suggestPalettes(slug, name = '') {
     return HOLIDAY_PALETTES.fall_equinox;
   if (lower.includes('kwanzaa'))
     return HOLIDAY_PALETTES.kwanzaa;
+  if (lower.includes('friday_13') || lower.includes('friday the 13'))
+    return HOLIDAY_PALETTES.friday_13;
+  if (lower.includes('mother'))
+    return HOLIDAY_PALETTES.mothers_day;
+  if (lower.includes('father'))
+    return HOLIDAY_PALETTES.fathers_day;
 
   // Fall back to random vibrant palettes
   return [randomPalette(3), randomPalette(4), randomPalette(3)];

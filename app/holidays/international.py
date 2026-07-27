@@ -110,7 +110,9 @@ def get_international_holidays(year: int) -> list[dict]:
             "date": date(year, 12, 26),
             "window_start": date(year, 12, 26),
             "window_end": date(year + 1, 1, 1),
-            "colors": ["#ff0000", "#00cc00", "#000000"],
+            # Bendera colors are red/black/green, but black renders as white on a
+            # bulb (hex_to_xy has no luminance) — gold stands in for the black stripe.
+            "colors": ["#ff0000", "#00cc00", "#ffd700"],
             "category": "international",
         },
     ]

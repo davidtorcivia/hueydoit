@@ -4,6 +4,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    """Get the nth occurrence of a weekday in a month. weekday: 0=Mon, 6=Sun."""
+    first = date(year, month, 1)
+    offset = (weekday - first.weekday()) % 7
+    return first + timedelta(days=offset + 7 * (n - 1))
+
+
 def _easter(year: int) -> date:
     """Compute Easter Sunday using the Anonymous Gregorian algorithm (computus)."""
     a = year % 19
@@ -138,7 +145,7 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": date(year, 2, 14),
             "window_start": date(year, 2, 13),
             "window_end": date(year, 2, 14),
-            "colors": ["#ff1493", "#ff69b4", "#ff0000"],
+            "colors": ["#ff0033", "#ff69b4", "#ffeedd"],
             "category": "cultural",
         },
         {
@@ -147,7 +154,7 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": date(year, 3, 17),
             "window_start": date(year, 3, 16),
             "window_end": date(year, 3, 17),
-            "colors": ["#00ff00", "#00cc44", "#ffeedd"],
+            "colors": ["#00ff33", "#88ff00", "#ffd700"],
             "category": "cultural",
         },
         {
@@ -157,6 +164,24 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "window_start": easter - timedelta(days=1),
             "window_end": easter,
             "colors": ["#ff69b4", "#ffff00", "#87ceeb", "#90ee90"],
+            "category": "cultural",
+        },
+        {
+            "name": "Mother's Day",
+            "slug": "mothers_day",
+            "date": _nth_weekday(year, 5, 6, 2),
+            "window_start": _nth_weekday(year, 5, 6, 2),
+            "window_end": _nth_weekday(year, 5, 6, 2),
+            "colors": ["#ff69b4", "#cc66ff", "#ffeedd"],
+            "category": "cultural",
+        },
+        {
+            "name": "Father's Day",
+            "slug": "fathers_day",
+            "date": _nth_weekday(year, 6, 6, 3),
+            "window_start": _nth_weekday(year, 6, 6, 3),
+            "window_end": _nth_weekday(year, 6, 6, 3),
+            "colors": ["#0088ff", "#00d0ff", "#ffd700"],
             "category": "cultural",
         },
         {
@@ -201,7 +226,7 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": _hanukkah_start(year),
             "window_start": _hanukkah_start(year),
             "window_end": _hanukkah_start(year) + timedelta(days=7),
-            "colors": ["#4488ff", "#ffeedd", "#66aaff"],
+            "colors": ["#0055ff", "#ffeedd", "#00d0ff"],
             "category": "cultural",
         },
         {

@@ -26,7 +26,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": date(year, 1, 1),
             "window_start": date(year - 1, 12, 30),
             "window_end": date(year, 1, 2),
-            "colors": ["#ffd700", "#c0c0c0", "#ffffff"],
+            "colors": ["#ffd700", "#ffeedd", "#00d0ff"],
             "category": "us_federal",
         },
         {
@@ -107,7 +107,7 @@ def get_us_federal_holidays(year: int) -> list[dict]:
             "date": _nth_weekday(year, 11, 3, 4),
             "window_start": _nth_weekday(year, 11, 3, 4) - timedelta(days=1),
             "window_end": _nth_weekday(year, 11, 3, 4),
-            "colors": ["#ff6600", "#ffd700", "#ff4500"],
+            "colors": ["#ff8c00", "#ffcc00", "#b3001b"],
             "category": "us_federal",
         },
         {

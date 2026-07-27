@@ -29,7 +29,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 2, 2),
             "window_start": date(year, 2, 2),
             "window_end": date(year, 2, 2),
-            "colors": ["#8B4513", "#00cc00", "#ffeedd"],
+            "colors": ["#ffaa00", "#00cc44", "#ffeedd"],
             "category": "fun",
         },
         # Super Bowl Sunday — 2nd Sunday of February
@@ -49,7 +49,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 2, 9),
             "window_start": date(year, 2, 9),
             "window_end": date(year, 2, 9),
-            "colors": ["#ff4400", "#ffcc00", "#ff8800"],
+            "colors": ["#ff2200", "#ffcc00", "#00cc44"],
             "category": "fun",
         },
         # Pi Day
@@ -99,7 +99,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": _first_weekday(year, 6, 4),
             "window_start": _first_weekday(year, 6, 4),
             "window_end": _first_weekday(year, 6, 4),
-            "colors": ["#ff69b4", "#ffcc00", "#8B4513"],
+            "colors": ["#ff69b4", "#ffcc00", "#00d0ff"],
             "category": "fun",
         },
         # Pride Month kickoff
@@ -129,7 +129,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": _nth_weekday(year, 7, 6, 3),
             "window_start": _nth_weekday(year, 7, 6, 3),
             "window_end": _nth_weekday(year, 7, 6, 3),
-            "colors": ["#ff69b4", "#ffeedd", "#8B4513"],
+            "colors": ["#ff69b4", "#ffeedd", "#00e5a0"],
             "category": "fun",
         },
         # International Cat Day
@@ -139,7 +139,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 8, 8),
             "window_start": date(year, 8, 8),
             "window_end": date(year, 8, 8),
-            "colors": ["#ff8800", "#ffeedd", "#888888"],
+            "colors": ["#ff8800", "#ffeedd", "#00d0ff"],
             "category": "fun",
         },
         # Talk Like a Pirate Day
@@ -149,7 +149,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 9, 19),
             "window_start": date(year, 9, 19),
             "window_end": date(year, 9, 19),
-            "colors": ["#ffd700", "#ff0000", "#000000"],
+            "colors": ["#ffd700", "#ff2200", "#0088ff"],
             "category": "fun",
         },
         # National Coffee Day
@@ -159,7 +159,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 9, 29),
             "window_start": date(year, 9, 29),
             "window_end": date(year, 9, 29),
-            "colors": ["#8B4513", "#ffd700", "#ffeedd"],
+            "colors": ["#ff6a00", "#ffcc00", "#ffeedd"],
             "category": "fun",
         },
         # National Taco Day
@@ -179,7 +179,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": date(year, 12, 23),
             "window_start": date(year, 12, 23),
             "window_end": date(year, 12, 23),
-            "colors": ["#c0c0c0", "#808080", "#ffeedd"],
+            "colors": ["#cce6ff", "#ffffff", "#ffeedd"],
             "category": "fun",
         },
         # New Year's Eve
@@ -202,7 +202,7 @@ def get_fun_holidays(year: int) -> list[dict]:
             "date": f13,
             "window_start": f13,
             "window_end": f13,
-            "colors": ["#ff0000", "#000000", "#880000"],
+            "colors": ["#ff0011", "#7700ff", "#00ff44"],
             "category": "fun",
         })
 

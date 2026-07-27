@@ -66,7 +66,7 @@ def get_seasonal_holidays(year: int) -> list[dict]:
             "date": _fall_equinox(year),
             "window_start": _fall_equinox(year),
             "window_end": _fall_equinox(year),
-            "colors": ["#ff6600", "#ff4400", "#ffd700"],
+            "colors": ["#ffb300", "#e63200", "#9e0022"],
             "category": "seasonal",
         },
         {
@@ -75,7 +75,7 @@ def get_seasonal_holidays(year: int) -> list[dict]:
             "date": _winter_solstice(year),
             "window_start": _winter_solstice(year),
             "window_end": _winter_solstice(year),
-            "colors": ["#88bbff", "#ffeedd", "#aaddff"],
+            "colors": ["#0066ff", "#ffeedd", "#00d0ff"],
             "category": "seasonal",
         },
     ]
