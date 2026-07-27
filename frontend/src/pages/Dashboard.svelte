@@ -1,4 +1,5 @@
 <script>
+  import { bulbPreview } from '../lib/color.js';
   import LightCard from '../components/LightCard.svelte';
   import ProviderStatus from '../components/ProviderStatus.svelte';
   import { api } from '../lib/api.js';
@@ -144,7 +145,7 @@
           <div class="coming-up-targets">
             {#each nextTrigger.current as pred}
               <div class="prediction-row">
-                <div class="pred-color" style="background: {pred.color || '#888'}"></div>
+                <div class="pred-color" style="background: {pred.color ? bulbPreview(pred.color) : '#6b7482'}"></div>
                 <div class="pred-info">
                   <span class="pred-name">{pred.friendly_name || pred.target}</span>
                   <span class="pred-rule">{pred.rule_name}</span>
@@ -163,9 +164,15 @@
             <span class="coming-up-countdown">{formatCountdown(event.time)}</span>
           </div>
           <div class="coming-up-targets">
+            {#if !event.targets?.length}
+              <div class="all-off">
+                <span class="off-dot"></span>
+                All lights off — no rule matches
+              </div>
+            {/if}
             {#each event.targets as pred}
               <div class="prediction-row">
-                <div class="pred-color" style="background: {pred.color || '#888'}"></div>
+                <div class="pred-color" style="background: {pred.color ? bulbPreview(pred.color) : '#6b7482'}"></div>
                 <div class="pred-info">
                   <span class="pred-name">{pred.friendly_name || pred.target}</span>
                   <span class="pred-rule">{pred.rule_name}</span>
@@ -194,6 +201,15 @@
 {/if}
 
 <style>
+  .all-off {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13px; color: var(--text-muted); padding: 6px 0;
+  }
+  .off-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px dashed var(--border-light); flex-shrink: 0;
+  }
+
   .coming-up-section {
     display: flex;
     gap: 16px;

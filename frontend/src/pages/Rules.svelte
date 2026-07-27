@@ -5,6 +5,7 @@
   import { toast } from '../lib/toast.js';
   import { addWSListener } from '../lib/websocket.js';
   import { ruleTemplates } from '../lib/ruleTemplates.js';
+  import { bulbPreview } from '../lib/color.js';
 
   let rules = $state([]);
   let targets = $state([]);
@@ -14,6 +15,16 @@
   let dragIdx = $state(-1);
   let showTemplates = $state(false);
   let fileInput = $state(null);
+
+  let targetLabels = $derived(
+    Object.fromEntries(targets.map((t) => [t.name, t.friendly_name || t.name]))
+  );
+
+  function targetNames(rule) {
+    const list = rule.config?.targets || [];
+    if (!list.length) return '—';
+    return list.map((n) => targetLabels[n] || n).join(', ');
+  }
 
   async function exportConfig() {
     try {
@@ -321,22 +332,24 @@
             {#if rule.config?.effect?.use_holiday_colors}
               <span class="badge ok" title="Uses active holiday palette">auto</span>
             {/if}
-            {#if rule.config?.effect?.colors}
-              {#each rule.config.effect.colors.slice(0, 3) as color}
-                <span class="color-dot" style="background: {color};"></span>
-              {/each}
+            {#if rule.config?.effect?.colors?.length}
+              <span class="strip" title={rule.config.effect.colors.join('  ')}>
+                {#each rule.config.effect.colors.slice(0, 4) as color}
+                  <span class="strip-seg" style="background: {bulbPreview(color)}"></span>
+                {/each}
+              </span>
             {/if}
           </td>
-          <td style="font-size: 13px;">{rule.config?.targets?.join(', ') || '-'}</td>
+          <td class="cell-targets">{targetNames(rule)}</td>
           <td>
             <div class="toggle" class:active={rule.enabled} onclick={() => handleToggle(rule)}></div>
           </td>
           <td>
-            <div class="flex gap-2">
-              <button class="small primary" onclick={() => handleTrigger(rule)}>Run</button>
+            <div class="row-actions">
               <button class="small secondary" onclick={() => openEdit(rule)}>Edit</button>
-              <button class="small secondary" onclick={() => cloneRule(rule)}>Clone</button>
-              <button class="small danger" onclick={() => handleDelete(rule.id)}>Del</button>
+              <button class="small ghost" title="Apply this rule now for 30 minutes" onclick={() => handleTrigger(rule)}>Run</button>
+              <button class="small ghost" title="Duplicate" onclick={() => cloneRule(rule)}>Clone</button>
+              <button class="small ghost danger-text" title="Delete rule" onclick={() => handleDelete(rule.id)}>Delete</button>
             </div>
           </td>
         </tr>
@@ -361,6 +374,15 @@
 {/if}
 
 <style>
+  .cell-targets { font-size: 13px; color: var(--text-secondary); }
+  .row-actions { display: flex; gap: var(--space-1); align-items: center; }
+  .strip {
+    display: inline-flex; width: 54px; height: 16px; vertical-align: middle;
+    border-radius: 5px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.14); margin-left: 6px;
+  }
+  .strip-seg { flex: 1; }
+
   .template-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

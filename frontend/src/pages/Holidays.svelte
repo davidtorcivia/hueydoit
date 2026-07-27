@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { toast } from '../lib/toast.js';
   import { suggestPalettes } from '../lib/paletteSuggest.js';
+  import { bulbPreview } from '../lib/color.js';
 
   let holidays = $state([]);
   let loading = $state(true);
@@ -33,6 +34,26 @@
 
   let filtered = $derived(
     filter === 'all' ? holidays : holidays.filter(h => h.category === filter)
+  );
+
+  const CATEGORY_ORDER = ['custom', 'us_federal', 'cultural', 'international', 'seasonal', 'fun'];
+  const CATEGORY_LABEL = {
+    custom: 'Custom', us_federal: 'US Federal', cultural: 'Cultural',
+    international: 'International', seasonal: 'Seasonal', fun: 'Fun',
+  };
+
+  // Grouped by category, then by date, so the page reads as sections rather
+  // than one undifferentiated wall of cards.
+  let grouped = $derived(
+    CATEGORY_ORDER
+      .map((cat) => ({
+        cat,
+        label: CATEGORY_LABEL[cat] || cat,
+        items: filtered
+          .filter((h) => h.category === cat)
+          .sort((a, b) => String(a.date).localeCompare(String(b.date))),
+      }))
+      .filter((g) => g.items.length > 0)
   );
 
   async function addHoliday() {
@@ -167,8 +188,13 @@
 {#if loading}
   <p>Loading...</p>
 {:else}
-  <div class="grid grid-3">
-    {#each filtered as h}
+  {#each grouped as group}
+    <div class="section-title">
+      <h2>{group.label}</h2>
+      <span class="count">{group.items.length}</span>
+    </div>
+    <div class="grid grid-3">
+      {#each group.items as h}
       <div class="card holiday-card" class:active-holiday={isActive(h)} class:disabled-holiday={!h.enabled}>
         <div class="flex justify-between items-center mb-2">
           <h3>{h.name}</h3>
@@ -177,7 +203,7 @@
             <div class="toggle" class:active={h.enabled} onclick={() => toggleEnabled(h)}></div>
           </div>
         </div>
-        <div class="holiday-date">{h.date} <span class="priority-badge">P{h.priority ?? '?'}</span></div>
+        <div class="holiday-date" title="Priority {h.priority ?? '?'} — lower wins when holidays overlap">{h.date}</div>
         {#if h.window_start !== h.date || h.window_end !== h.date}
           <div class="holiday-window">Window: {h.window_start} — {h.window_end}</div>
         {/if}
@@ -235,15 +261,16 @@
           </div>
         {:else}
           <div class="holiday-colors-row">
-            <div class="holiday-colors">
-              {#each h.colors || [] as color}
-                <span class="color-dot" style="background: {color};"></span>
-              {/each}
-              {#if !h.colors?.length}
-                <span class="text-muted" style="font-size: 12px;">No colors</span>
-              {/if}
-            </div>
-            <button class="small secondary edit-btn" onclick={() => startEdit(h)}>Edit</button>
+            {#if h.colors?.length}
+              <div class="strip" title={h.colors.join('  ')}>
+                {#each h.colors as color}
+                  <span class="strip-seg" style="background: {bulbPreview(color)}"></span>
+                {/each}
+              </div>
+            {:else}
+              <span class="no-colors">No colours</span>
+            {/if}
+            <button class="small ghost edit-btn" onclick={() => startEdit(h)}>Edit</button>
           </div>
         {/if}
 
@@ -254,8 +281,9 @@
           <button class="small danger mt-2" onclick={() => removeHoliday(h.id)}>Remove</button>
         {/if}
       </div>
-    {/each}
-  </div>
+      {/each}
+    </div>
+  {/each}
 {/if}
 
 {#if showAdd}
@@ -306,7 +334,11 @@
 {/if}
 
 <style>
-  .holiday-card { position: relative; }
+  .holiday-card {
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 132px;
+  }
   .holiday-card.active-holiday { border-color: var(--success); }
   .holiday-card.disabled-holiday { opacity: 0.5; }
   .holiday-date { font-size: 14px; color: var(--text-secondary); }
@@ -314,11 +346,20 @@
   .holiday-window { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .holiday-colors-row {
     display: flex; align-items: center; justify-content: space-between;
-    margin-top: 8px; gap: 8px;
+    margin-top: auto; padding-top: var(--space-3); gap: var(--space-3);
   }
-  .holiday-colors {
-    display: flex; gap: 4px; align-items: center;
-    padding: 4px; border-radius: var(--radius);
+  /* Shown as one continuous strip — closer to how the rope lights read than
+     separate dots, and far more legible than the old 10px circles. */
+  .strip {
+    display: flex; flex: 1; height: 26px;
+    border-radius: 7px; overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .strip-seg { flex: 1; }
+  .no-colors { font-size: 12px; color: var(--text-muted); flex: 1; }
+  .count {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    background: rgba(255,255,255,.06); padding: 1px 7px; border-radius: 999px;
   }
   .edit-btn { flex-shrink: 0; }
   .edit-panel {

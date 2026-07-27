@@ -1,21 +1,37 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-card: #0f3460;
-  --bg-input: #1a1a3e;
-  --text-primary: #e4e4e7;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --accent: #4f86f7;
-  --accent-hover: #3b6fd9;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --border: #27274a;
-  --border-light: #3f3f6f;
-  --shadow: rgba(0, 0, 0, 0.3);
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* Neutral slate rather than saturated navy. This app's whole job is showing
+     colour, and blue-tinted chrome shifts how every swatch beside it reads. */
+  --bg-primary: #0d1016;
+  --bg-secondary: #141922;
+  --bg-card: #171d28;
+  --bg-elevated: #1d2431;
+  --bg-input: #0f141c;
+
+  --text-primary: #e8eaed;
+  --text-secondary: #a4adbb;
+  --text-muted: #6b7482;
+
+  --accent: #5b8cff;
+  --accent-hover: #7ba1ff;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --success: #34d07f;
+  --warning: #f0a726;
+  --error: #f2555a;
+
+  --border: #232b38;
+  --border-light: #323c4c;
+  --shadow: rgba(0, 0, 0, 0.45);
+
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 14px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
 }
 
 * {
@@ -55,13 +71,33 @@ button.primary:hover {
 }
 
 button.secondary {
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
 }
 button.secondary:hover {
   border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--accent-soft);
 }
+
+/* Low-emphasis action, for repeated row controls that shouldn't shout */
+button.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+}
+button.ghost:hover { color: var(--text-primary); background: rgba(255,255,255,.06); }
+button.ghost.danger-text:hover { color: var(--error); background: rgba(242,85,90,.1); }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
 
 button.danger {
   background: var(--error);
@@ -94,9 +130,10 @@ input:focus, select:focus, textarea:focus {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: 0 2px 8px var(--shadow);
+  padding: var(--space-4);
+  transition: border-color .15s, background .15s;
 }
+.card:hover { border-color: var(--border-light); }
 
 .badge {
   display: inline-flex;
@@ -106,10 +143,11 @@ input:focus, select:focus, textarea:focus {
   font-size: 12px;
   font-weight: 600;
 }
-.badge.ok { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-.badge.warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
-.badge.error { background: rgba(239, 68, 68, 0.2); color: var(--error); }
-.badge.info { background: rgba(79, 134, 247, 0.2); color: var(--accent); }
+.badge.ok { background: rgba(52, 208, 127, 0.16); color: var(--success); }
+.badge.warning { background: rgba(240, 167, 38, 0.16); color: var(--warning); }
+.badge.error { background: rgba(242, 85, 90, 0.16); color: var(--error); }
+.badge.info { background: var(--accent-soft); color: var(--accent); }
+.badge.neutral { background: rgba(255,255,255,.06); color: var(--text-muted); }
 
 .grid {
   display: grid;
@@ -131,12 +169,15 @@ input:focus, select:focus, textarea:focus {
 .mt-2 { margin-top: 8px; }
 .mt-4 { margin-top: 16px; }
 
-h1 { font-size: 24px; font-weight: 700; }
-h2 { font-size: 20px; font-weight: 600; }
-h3 { font-size: 16px; font-weight: 600; }
+h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+h2 {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 
 .page {
-  padding: 24px;
+  padding: var(--space-6) var(--space-5);
   flex: 1;
   overflow-y: auto;
 }
@@ -145,7 +186,19 @@ h3 { font-size: 16px; font-weight: 600; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+/* Section label + rule, so stacked sections read as separate blocks */
+.section-title {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-3);
+}
+.section-title:first-of-type { margin-top: 0; }
+.section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
 }
 
 .toggle {
@@ -201,13 +254,14 @@ h3 { font-size: 16px; font-weight: 600; }
 
 .modal {
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 24px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
+  padding: var(--space-5);
+  max-width: 620px;
+  width: min(92vw, 620px);
+  max-height: 88vh;
   overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
 }
 
 .form-group {
@@ -275,16 +329,33 @@ table {
   border-collapse: collapse;
 }
 th, td {
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
 th {
-  font-size: 12px;
+  font-size: 11px;
+  letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
 }
-tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+tbody tr:last-child td { border-bottom: none; }
+
+
+/* Colour swatch used across holiday and rule lists */
+.swatch-row { display: flex; gap: 5px; align-items: center; }
+.swatch {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+.swatch.sm { width: 16px; height: 16px; border-radius: 4px; }
+
+@media (max-width: 860px) {
+  #app { flex-direction: column; }
+  .page { padding: var(--space-4); }
+  .page-header { align-items: flex-start; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
