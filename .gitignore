@@ -10,6 +10,10 @@ frontend/dist/
 data/
 .env
 
+# Local config snapshots (contain bridge light UUIDs)
+config.json
+config.backup*.json
+
 # IDE
 .vscode/
 .idea/

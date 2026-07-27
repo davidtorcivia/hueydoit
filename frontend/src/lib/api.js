@@ -49,6 +49,9 @@ export const api = {
   pairBridge: () => request('POST', '/api/bridge/pair'),
   getBridgeStatus: () => request('GET', '/api/bridge/status'),
 
+  exportConfig: () => request('GET', '/api/config/export'),
+  importConfig: (config, replace = false) => request('POST', '/api/config/import', { config, replace }),
+
   getLogs: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request('GET', `/api/logs${qs ? '?' + qs : ''}`);

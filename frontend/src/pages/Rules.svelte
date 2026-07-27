@@ -13,6 +13,39 @@
   let loading = $state(true);
   let dragIdx = $state(-1);
   let showTemplates = $state(false);
+  let fileInput = $state(null);
+
+  async function exportConfig() {
+    try {
+      const cfg = await api.exportConfig();
+      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `huey-config-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Config exported');
+    } catch (e) {
+      toast.error('Export failed: ' + e.message);
+    }
+  }
+
+  async function importConfig(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!confirm(`Import ${file.name}? Rules are matched by name and updated in place; nothing is deleted.`)) return;
+    try {
+      const cfg = JSON.parse(await file.text());
+      const res = await api.importConfig(cfg, false);
+      const n = res.imported;
+      toast.success(`Imported ${n.rules} rules, ${n.holiday_config} holiday overrides`);
+      await loadData();
+    } catch (e) {
+      toast.error('Import failed: ' + e.message);
+    }
+  }
 
   $effect(() => {
     loadData();
@@ -214,12 +247,25 @@
 <div class="page-header">
   <h1>Rules</h1>
   <div class="flex gap-2">
+    <button class="secondary" onclick={exportConfig} title="Download rules, targets and holiday overrides as JSON">
+      Export
+    </button>
+    <button class="secondary" onclick={() => fileInput.click()} title="Restore from an exported JSON file">
+      Import
+    </button>
     <button class="secondary" onclick={() => showTemplates = !showTemplates}>
       Quick Start
     </button>
     <button class="primary" onclick={openCreate}>+ Create Rule</button>
   </div>
 </div>
+<input
+  type="file"
+  accept="application/json,.json"
+  bind:this={fileInput}
+  onchange={importConfig}
+  style="display: none"
+/>
 
 {#if showTemplates}
   <div class="template-grid mb-4">

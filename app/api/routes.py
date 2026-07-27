@@ -8,6 +8,7 @@ from app.api.holidays import router as holidays_router
 from app.api.overrides import router as overrides_router
 from app.api.bridge import router as bridge_router
 from app.api.logs import router as logs_router
+from app.api.config import router as config_router
 
 router = APIRouter()
 router.include_router(status_router)
@@ -18,3 +19,4 @@ router.include_router(holidays_router)
 router.include_router(overrides_router)
 router.include_router(bridge_router)
 router.include_router(logs_router)
+router.include_router(config_router)

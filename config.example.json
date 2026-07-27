@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "Fall",
+      "priority": 20,
+      "enabled": true,
+      "config": {
+        "condition": {
+          "all_of": [
+            {
+              "provider": "calendar",
+              "match": {
+                "date_range": {
+                  "start": "09-22",
+                  "end": "12-20"
+                }
+              }
+            },
+            {
+              "provider": "solar",
+              "match": {
+                "period": "night",
+                "sunset_offset": "-30m"
+              }
+            },
+            {
+              "provider": "time",
+              "match": {
+                "hour": {
+                  "gte": 18
+                }
+              }
+            }
+          ]
+        },
+        "effect": {
+          "mode": "breathe",
+          "brightness": 100,
+          "transition": 10000,
+          "use_holiday_colors": true,
+          "colors": [
+            "#ffb300",
+            "#e63200",
+            "#9e0022"
+          ],
+          "color_map": {
+            "left_window": "#ffb300",
+            "bedroom_window": "#e63200",
+            "right_window_light": "#9e0022"
+          }
+        },
+        "targets": [
+          "left_window",
+          "bedroom_window",
+          "right_window_light"
+        ]
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "left_window",
+      "type": "light",
+      "hue_id": "00000000-0000-0000-0000-000000000000",
+      "friendly_name": "Left Window"
+    }
+  ],
+  "holiday_config": [
+    {
+      "slug": "christmas",
+      "colors": [
+        "#ff0000",
+        "#00ff00",
+        "#ffffff"
+      ],
+      "enabled": true,
+      "window_before_days": 24,
+      "window_after_days": 5,
+      "priority": null
+    }
+  ],
+  "custom_holidays": [],
+  "providers": [
+    {
+      "name": "weather",
+      "config": {},
+      "ttl_seconds": 7200
+    }
+  ]
+}
