@@ -170,10 +170,7 @@ input:focus, select:focus, textarea:focus {
 .mt-4 { margin-top: 16px; }
 
 h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-h2 {
-  font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-muted);
-}
+h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 
 .page {
@@ -197,6 +194,10 @@ h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   margin: var(--space-6) 0 var(--space-3);
 }
 .section-title:first-of-type { margin-top: 0; }
+.section-title h2 {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
 .section-title::after {
   content: ''; flex: 1; height: 1px; background: var(--border);
 }

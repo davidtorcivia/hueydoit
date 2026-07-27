@@ -35,6 +35,13 @@
     }
     refreshing = false;
   }
+
+  function formatTtl(seconds) {
+    if (!seconds) return '—';
+    if (seconds >= 86400) return `${Math.round(seconds / 86400)}d`;
+    if (seconds >= 3600) return `${Math.round(seconds / 3600)}h`;
+    return `${Math.round(seconds / 60)}m`;
+  }
 </script>
 
 <div class="card provider-card">
@@ -50,7 +57,7 @@
   {/if}
 
   <div class="provider-meta">
-    <span>TTL: {Math.floor(provider.ttl_seconds / 60)}m</span>
+    <span>TTL: {formatTtl(provider.ttl_seconds)}</span>
     {#if provider.last_fetch}
       <span>Last: {new Date(provider.last_fetch).toLocaleTimeString()}</span>
     {/if}

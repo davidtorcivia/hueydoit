@@ -126,7 +126,7 @@
   {/if}
 
   {#if lights.length > 0}
-    <h2 class="mb-3">Lights</h2>
+    <div class="section-title"><h2>Lights</h2></div>
     <div class="grid grid-3 mb-4">
       {#each lights as light (light.name)}
         <LightCard {light} onOverride={handleOverride} onClearOverride={handleClearOverride} />
@@ -135,7 +135,7 @@
   {/if}
 
   {#if nextTrigger}
-    <h2 class="mb-3">Coming Up</h2>
+    <div class="section-title"><h2>Coming Up</h2></div>
     <div class="coming-up-section mb-4">
       {#if nextTrigger.current && nextTrigger.current.length > 0}
         <div class="card coming-up-card">
@@ -192,7 +192,7 @@
     </div>
   {/if}
 
-  <h2 class="mb-3">Providers</h2>
+  <div class="section-title"><h2>Providers</h2></div>
   <div class="grid grid-3">
     {#each providers as provider (provider.name)}
       <ProviderStatus {provider} />

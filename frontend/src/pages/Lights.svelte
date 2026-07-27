@@ -118,7 +118,7 @@
           <td>
             <div class="flex gap-2">
               <button class="small secondary" onclick={() => flashLight(light.name)}>Flash</button>
-              <button class="small danger" onclick={() => removeLight(light.name)}>Remove</button>
+              <button class="small ghost danger-text" onclick={() => removeLight(light.name)}>Remove</button>
             </div>
           </td>
         </tr>
