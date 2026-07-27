@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     hue_bridge_ip: str = ""
     external_override_timeout_min: int = 30
     db_path: str = "data/huey-do-it.db"
+    # Restart if the scheduler stops beating for this long. Periodic
+    # evaluation runs every 5 minutes, so this is 4 missed cycles. 0 disables.
+    watchdog_stall_minutes: int = 20
     log_retention_days: int = 14
     log_max_rows: int = 20000
 

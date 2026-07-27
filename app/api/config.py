@@ -9,10 +9,12 @@ commit to a repository.
 """
 import json
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.config import settings
 from app.database import add_log, get_db
 from app.engine.scheduler import engine_scheduler
 
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 CONFIG_VERSION = 1
+SNAPSHOT_LIMIT = 20
 
 
 class ConfigImport(BaseModel):
@@ -36,8 +39,9 @@ def _loads(raw):
     return raw
 
 
-@router.get("/config/export")
-async def export_config():
+async def build_config() -> dict:
+    """The full configuration document. Shared by the export route and the
+    automatic snapshots, so a snapshot can never drift from what you'd download."""
     async with get_db() as db:
         cursor = await db.execute(
             "SELECT name, priority, enabled, config FROM rules ORDER BY priority, id"
@@ -111,6 +115,47 @@ async def export_config():
     }
 
 
+@router.get("/config/export")
+async def export_config():
+    return await build_config()
+
+
+async def write_snapshot(reason: str) -> str | None:
+    """Write a timestamped config snapshot under data/backups/.
+
+    Rules and holiday overrides live only in SQLite, and importing with
+    replace=true deletes them outright. This is the undo.
+    """
+    from datetime import datetime
+
+    try:
+        backup_dir = os.path.join(os.path.dirname(settings.db_path) or ".", "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+
+        config = await build_config()
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        path = os.path.join(backup_dir, f"config-{stamp}-{reason}.json")
+        with open(path, "w") as fh:
+            json.dump(config, fh, indent=2)
+
+        # Keep the most recent SNAPSHOT_LIMIT so this can't grow without bound.
+        snapshots = sorted(
+            f for f in os.listdir(backup_dir)
+            if f.startswith("config-") and f.endswith(".json")
+        )
+        for stale in snapshots[:-SNAPSHOT_LIMIT]:
+            try:
+                os.remove(os.path.join(backup_dir, stale))
+            except OSError as e:
+                logger.debug("Could not remove old snapshot %s: %s", stale, e)
+
+        logger.info("Wrote config snapshot %s (%d rules)", path, len(config["rules"]))
+        return path
+    except Exception as e:
+        logger.error("Config snapshot failed (%s): %s", reason, e)
+        return None
+
+
 @router.post("/config/import")
 async def import_config(payload: ConfigImport):
     """Apply an exported config.
@@ -131,6 +176,10 @@ async def import_config(payload: ConfigImport):
         )
 
     counts = {"rules": 0, "targets": 0, "holiday_config": 0, "custom_holidays": 0, "providers": 0}
+
+    # replace=true deletes rules and holiday overrides. Snapshot first so it can
+    # be undone by importing the snapshot back.
+    snapshot = await write_snapshot("pre-import") if payload.replace else None
 
     async with get_db() as db:
         if payload.replace:
@@ -225,4 +274,4 @@ async def import_config(payload: ConfigImport):
 
     await add_log("info", "api", f"Imported config (replace={payload.replace})", counts)
     await engine_scheduler.trigger_evaluation()
-    return {"imported": counts, "replace": payload.replace}
+    return {"imported": counts, "replace": payload.replace, "snapshot": snapshot}

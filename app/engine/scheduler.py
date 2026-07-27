@@ -21,6 +21,7 @@ from app.providers.time_provider import TimeProvider
 from app.providers.calendar_provider import CalendarProvider
 from app.ws import ws_manager
 from app.database import add_log, get_db, prune_logs
+from app import watchdog
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,14 @@ class EngineScheduler:
             replace_existing=True,
         )
 
+        self._scheduler.add_job(
+            self._nightly_snapshot,
+            CronTrigger(hour=4, minute=30),
+            id="config_snapshot",
+            name="Nightly config snapshot",
+            replace_existing=True,
+        )
+
         self._breathe_phase = False
         self._scheduler.add_job(
             self._breathe_loop,
@@ -96,6 +105,8 @@ class EngineScheduler:
 
         self._scheduler.start()
         logger.info("Scheduler started with %d providers", len(self._providers))
+
+        watchdog.start(settings.watchdog_stall_minutes * 60)
 
         try:
             await prune_logs()
@@ -461,8 +472,21 @@ class EngineScheduler:
             "upcoming": upcoming,
         }
 
+    async def _nightly_snapshot(self):
+        """Rules and holiday overrides exist only in SQLite; keep a rolling
+        JSON copy so a bad import or a corrupt database isn't the end of them."""
+        from app.api.config import write_snapshot
+
+        await write_snapshot("nightly")
+
     async def _periodic_eval(self):
-        """Fallback evaluation every 5 minutes to keep state fresh."""
+        """Fallback evaluation every 5 minutes to keep state fresh.
+
+        Also the watchdog heartbeat — this firing proves the event loop and the
+        scheduler executor are both still alive, independent of whether any rule
+        actually matched.
+        """
+        watchdog.heartbeat()
         logger.debug("Periodic evaluation running")
         await evaluator.evaluate_all()
 
