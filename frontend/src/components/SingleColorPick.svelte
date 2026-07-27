@@ -1,65 +1,25 @@
 <script>
+  import { bulbPreview, ctKelvin, ctToHex, hexToHsl, hslToHex, isCt, isHex } from '../lib/color.js';
+
   let { value = '#ffffff', onChange } = $props();
   let open = $state(false);
   let hue = $state(0);
   let sat = $state(100);
+  let popup = $state(null);
 
   const presets = [
-    '#ff0000', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff00',
-    '#00ff88', '#00ccff', '#0044ff', '#8800ff', '#ff00cc', '#ff0066',
+    '#ff0000', '#ff4400', '#ff8800', '#ffcc00', '#ccff00', '#44ff00',
+    '#00ffaa', '#00ddff', '#0033ff', '#7700ff', '#ff00cc', '#ff0066',
   ];
-  const ctPresets = [
-    { value: 'ct:500', label: '2000K' },
-    { value: 'ct:370', label: '2700K' },
-    { value: 'ct:250', label: '4000K' },
-    { value: 'ct:154', label: '6500K' },
-  ];
+  const ctPresets = ['ct:500', 'ct:370', 'ct:250', 'ct:154'];
 
-  function isCt(c) { return typeof c === 'string' && c.startsWith('ct:'); }
-
-  function hslToHex(h, s, l) {
-    s /= 100; l /= 100;
-    const a = s * Math.min(l, 1 - l);
-    const f = (n) => {
-      const k = (n + h / 30) % 12;
-      const color = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-      return Math.round(255 * Math.max(0, Math.min(1, color)));
-    };
-    return `#${f(0).toString(16).padStart(2,'0')}${f(8).toString(16).padStart(2,'0')}${f(4).toString(16).padStart(2,'0')}`;
+  function display(c) {
+    if (!c) return '#888888';
+    return isCt(c) ? ctToHex(c) : bulbPreview(c);
   }
 
-  function hexToHsl(hex) {
-    hex = hex.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16) / 255;
-    const g = parseInt(hex.substring(2, 4), 16) / 255;
-    const b = parseInt(hex.substring(4, 6), 16) / 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
-      else if (max === g) h = ((b - r) / d + 2) * 60;
-      else h = ((r - g) / d + 4) * 60;
-    }
-    return [Math.round(h), Math.round(s * 100)];
-  }
-
-  function displayColor(c) {
-    if (!c) return '#888';
-    if (isCt(c)) {
-      const mirek = parseInt(c.replace('ct:', ''));
-      const t = (mirek - 153) / (500 - 153);
-      const r = Math.round(255 * (0.8 + 0.2 * t));
-      const g = Math.round(255 * (0.7 + 0.15 * t - 0.15 * t * t));
-      const b = Math.round(255 * (0.5 + 0.5 * (1 - t)));
-      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
-    }
-    return c;
-  }
-
-  function openPicker() {
-    if (!isCt(value)) {
+  function toggle() {
+    if (!isCt(value) && isHex(value)) {
       const [h, s] = hexToHsl(value);
       hue = h; sat = s;
     }
@@ -68,24 +28,57 @@
 
   function pick(c) { onChange(c); open = false; }
   function updateHsl() { onChange(hslToHex(hue, sat, 50)); }
+
+  $effect(() => {
+    if (!open) return;
+    function onDocClick(e) {
+      if (popup && !popup.contains(e.target) && !e.target.closest('.scp-swatch')) open = false;
+    }
+    function onKey(e) { if (e.key === 'Escape') open = false; }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  });
 </script>
 
 <div class="scp">
-  <button class="scp-swatch" style="background: {displayColor(value)};" onclick={openPicker}></button>
+  <button
+    class="scp-swatch"
+    style="background: {display(value)}"
+    onclick={toggle}
+    aria-label="Pick colour, currently {isCt(value) ? ctKelvin(value) + 'K' : value}"
+    aria-expanded={open}
+  ></button>
+
   {#if open}
-    <div class="scp-popup">
+    <div class="scp-popup" bind:this={popup}>
       <div class="scp-presets">
         {#each presets as p}
-          <button class="scp-dot" style="background: {p};" onclick={() => pick(p)}></button>
+          <button class="scp-dot" style="background: {bulbPreview(p)}" onclick={() => pick(p)} aria-label={p}></button>
         {/each}
       </div>
       <div class="scp-ct">
         {#each ctPresets as ct}
-          <button class="scp-ct-btn" style="background: {displayColor(ct.value)};" onclick={() => pick(ct.value)}>{ct.label}</button>
+          <button class="scp-ct-btn" style="background: {ctToHex(ct)}" onclick={() => pick(ct)}>{ctKelvin(ct)}K</button>
         {/each}
       </div>
-      <input type="range" min="0" max="360" bind:value={hue} oninput={updateHsl} class="scp-hue" />
-      <input type="range" min="20" max="100" bind:value={sat} oninput={updateHsl} class="scp-sat" />
+      <label class="scp-row">
+        <span>Hue</span>
+        <input type="range" min="0" max="360" bind:value={hue} oninput={updateHsl} class="scp-hue" />
+      </label>
+      <label class="scp-row">
+        <span>Sat</span>
+        <input type="range" min="30" max="100" bind:value={sat} oninput={updateHsl} class="scp-sat" />
+      </label>
+      <div class="scp-foot">
+        <span class="scp-hex">{isCt(value) ? ctKelvin(value) + 'K' : value}</span>
+        {#if !isCt(value) && isHex(value) && bulbPreview(value).toLowerCase() !== value.toLowerCase()}
+          <span class="scp-shift">bulb: {bulbPreview(value)}</span>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
@@ -93,46 +86,48 @@
 <style>
   .scp { position: relative; }
   .scp-swatch {
-    width: 32px; height: 32px; border-radius: 6px;
+    width: 32px; height: 32px; border-radius: 7px;
     border: 2px solid var(--border-light); cursor: pointer;
-    padding: 0; transition: border-color 0.15s;
+    padding: 0; transition: border-color .15s, transform .15s;
   }
-  .scp-swatch:hover { border-color: var(--accent); }
+  .scp-swatch:hover { border-color: var(--accent); transform: translateY(-1px); }
   .scp-popup {
-    position: absolute; top: 38px; left: 0; z-index: 100;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px;
-    display: flex; flex-direction: column; gap: 8px;
-    min-width: 200px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    position: absolute; top: 40px; left: 0; z-index: 100;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: var(--radius); padding: 12px;
+    display: flex; flex-direction: column; gap: 9px;
+    min-width: 220px; box-shadow: 0 8px 28px rgba(0,0,0,.55);
   }
-  .scp-presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+  .scp-presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
   .scp-dot {
-    width: 24px; height: 24px; border-radius: 4px;
-    border: 1px solid rgba(255,255,255,0.1); cursor: pointer; padding: 0;
+    width: 26px; height: 26px; border-radius: 5px;
+    border: 1px solid rgba(255,255,255,.12); cursor: pointer; padding: 0;
+    transition: transform .1s;
   }
-  .scp-dot:hover { border-color: white; transform: scale(1.15); }
-  .scp-ct { display: flex; gap: 3px; }
+  .scp-dot:hover { border-color: #fff; transform: scale(1.12); }
+  .scp-ct { display: flex; gap: 4px; }
   .scp-ct-btn {
-    flex: 1; padding: 3px; border-radius: 4px; font-size: 9px; font-weight: 600;
-    border: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: #1a1a2e;
+    flex: 1; padding: 4px 2px; border-radius: 5px; font-size: 10px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,.12); cursor: pointer; color: #1a1a2e;
   }
-  .scp-ct-btn:hover { border-color: white; }
+  .scp-ct-btn:hover { border-color: #fff; }
+
+  .scp-row { display: flex; align-items: center; gap: 8px; }
+  .scp-row span { font-size: 11px; color: var(--text-muted); width: 24px; }
+  input[type="range"] {
+    flex: 1; height: 8px; border-radius: 4px;
+    -webkit-appearance: none; appearance: none; outline: none; border: none; padding: 0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; border: 2px solid rgba(0,0,0,.3); cursor: pointer;
+  }
   .scp-hue {
-    width: 100%; height: 8px; border-radius: 4px; -webkit-appearance: none; appearance: none;
     background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
-    outline: none; border: none; padding: 0;
   }
-  .scp-hue::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-    background: white; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
-  }
-  .scp-sat {
-    width: 100%; height: 8px; border-radius: 4px; -webkit-appearance: none; appearance: none;
-    background: linear-gradient(to right, #808080, var(--accent));
-    outline: none; border: none; padding: 0;
-  }
-  .scp-sat::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-    background: white; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
-  }
+  .scp-sat { background: linear-gradient(to right, #9aa0aa, var(--accent)); }
+
+  .scp-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .scp-hex { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-secondary); }
+  .scp-shift { font-size: 10px; color: var(--warning); }
 </style>

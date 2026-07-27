@@ -9,6 +9,7 @@ from app.bridge.effects import (
     ct_to_mirek,
     hex_to_xy,
     is_ct,
+    xy_to_hex,
 )
 
 
@@ -59,6 +60,22 @@ def test_greys_collapse_onto_white():
 def test_warm_and_cool_whites_stay_distinct():
     """These are the correct way to express a silver/white palette."""
     assert hex_to_xy("#ffeedd") != hex_to_xy("#cce6ff")
+
+
+@pytest.mark.parametrize("hex_color", [
+    "#ff0000", "#00ff00", "#ffffff", "#ffe600", "#ff0099", "#ffb300", "#ffeedd",
+])
+def test_hex_survives_a_round_trip(hex_color):
+    """xy_to_hex used a matrix that didn't pair with hex_to_xy's, so #ff0000 came
+    back as #ff914b and the dashboard mis-reported every light's colour."""
+    x, y = hex_to_xy(hex_color)
+    assert xy_to_hex(x, y) == hex_color
+
+
+def test_out_of_gamut_colour_keeps_its_hue():
+    """Pure blue is outside gamut C; it should shift, not wash out to pastel."""
+    r, g, b = (int(xy_to_hex(*hex_to_xy("#0000ff"))[i:i + 2], 16) for i in (1, 3, 5))
+    assert b > r and b > g, "blue should still be the dominant channel"
 
 
 def test_ct_helpers():

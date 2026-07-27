@@ -77,14 +77,27 @@ def hex_to_xy(hex_color: str) -> tuple[float, float]:
 
 
 def xy_to_hex(x: float, y: float, brightness: float = 1.0) -> str:
+    """Inverse of hex_to_xy.
+
+    This used Philips' "Wide RGB D65" matrix while hex_to_xy uses the sRGB D65
+    matrix — the two don't pair, so a round trip drifted badly (#ff0000 came
+    back as #ff914b, which is what the dashboard was showing for every light).
+    Now uses the true sRGB D65 inverse.
+    """
     z = 1.0 - x - y
     Y = brightness
     X = (Y / y) * x if y > 0 else 0
     Z = (Y / y) * z if y > 0 else 0
 
-    r = X * 1.656492 - Y * 0.354851 - Z * 0.255038
-    g = -X * 0.707196 + Y * 1.655397 + Z * 0.036152
-    b = X * 0.051713 - Y * 0.121364 + Z * 1.011530
+    r = X * 3.2404542 - Y * 1.5371385 - Z * 0.4985314
+    g = -X * 0.9692660 + Y * 1.8760108 + Z * 0.0415560
+    b = X * 0.0556434 - Y * 0.2040259 + Z * 1.0572252
+
+    # Scale rather than clip when a channel overshoots, so the hue is preserved
+    # instead of being desaturated toward white.
+    peak = max(r, g, b)
+    if peak > 1.0:
+        r, g, b = r / peak, g / peak, b / peak
 
     r = 1.055 * (r ** (1.0 / 2.4)) - 0.055 if r > 0.0031308 else 12.92 * r
     g = 1.055 * (g ** (1.0 / 2.4)) - 0.055 if g > 0.0031308 else 12.92 * g
@@ -94,7 +107,9 @@ def xy_to_hex(x: float, y: float, brightness: float = 1.0) -> str:
     g = max(0, min(1, g))
     b = max(0, min(1, b))
 
-    return "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
+    # round, not int — truncating loses a step and put pure red at #fe0000,
+    # which also made this disagree with the JS port in frontend/src/lib/color.js
+    return "#{:02x}{:02x}{:02x}".format(round(r * 255), round(g * 255), round(b * 255))
 
 
 def is_ct(color: str) -> bool:
