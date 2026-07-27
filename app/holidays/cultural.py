@@ -322,9 +322,7 @@ def get_cultural_holidays(year: int) -> list[dict]:
             "date": _eid_al_adha(year),
             "window_start": _eid_al_adha(year) - timedelta(days=1),
             "window_end": _eid_al_adha(year) + timedelta(days=2),
-            # Deeper green and the blue of the pilgrimage, so the Feast of
-            # Sacrifice doesn't look identical to Eid al-Fitr.
-            "colors": ["#00cc66", "#ffffff", "#0055ff"],
+            "colors": ["#00ff44", "#ffd700", "#ffffff"],
             "category": "cultural",
         },
         {
