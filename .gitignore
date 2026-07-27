@@ -17,3 +17,6 @@ config.backup*.json
 # IDE
 .vscode/
 .idea/
+
+# Local screenshots
+huey*.png
