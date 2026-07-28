@@ -82,6 +82,14 @@
   parseConditions(condition);
   if (groups.length === 0) addGroupWith([{}]);
 
+  // Hysteresis keys the visual builder doesn't model. Rebuilding the condition
+  // from the groups alone would drop them, so a rule saved from the UI would
+  // quietly lose its anti-flap settings. Edit them in advanced JSON.
+  const extras = {};
+  for (const key of ['for', 'deadband']) {
+    if (condition?.[key] !== undefined) extras[key] = condition[key];
+  }
+
   function addConditionToGroup(gi) {
     groups[gi] = [...groups[gi], {}];
     groupKeys[gi] = [...groupKeys[gi], nextKey++];
@@ -122,7 +130,7 @@
   }
 
   function buildCondition() {
-    if (condAlways) return { match: 'always' };
+    if (condAlways) return { ...extras, match: 'always' };
     if (showAdvanced) {
       try { return JSON.parse(advancedJson); } catch { return condition; }
     }
@@ -137,8 +145,8 @@
     // Single group
     if (validGroups.length === 1) {
       const g = validGroups[0];
-      if (g.length === 1) return g[0];
-      return { [`${innerOp}_of`]: g };
+      if (g.length === 1) return { ...extras, ...g[0] };
+      return { ...extras, [`${innerOp}_of`]: g };
     }
 
     // Multiple groups: wrap each group, then combine with outer op
@@ -146,7 +154,7 @@
       if (g.length === 1) return g[0];
       return { [`${innerOp}_of`]: g };
     });
-    return { [`${outerOp}_of`]: wrapped };
+    return { ...extras, [`${outerOp}_of`]: wrapped };
   }
 
   function emitChange() {
