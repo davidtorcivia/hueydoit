@@ -1,7 +1,10 @@
 """Rule condition matching — pure logic, no bridge or DB required."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.engine.evaluator import _parse_duration, _parse_signed_duration, evaluator
+from app.engine.state import state_manager
 
 STATES = {
     "time": {"hour": 21, "day_of_week": "monday", "is_weekend": False, "date": "2026-10-15"},
@@ -121,3 +124,38 @@ def test_parse_duration(text, seconds):
 ])
 def test_parse_signed_duration(text, seconds):
     assert _parse_signed_duration(text).total_seconds() == seconds
+
+
+def _tick(rule_id, condition, raw_match):
+    """One evaluation pass: hysteresis gate, then write back like evaluate_all."""
+    final = evaluator._apply_hysteresis(rule_id, condition, raw_match, STATES)
+    evaluator._record_hysteresis(rule_id, raw_match, final)
+    return final
+
+
+def test_for_gate_activates_once_the_duration_elapses():
+    rule_id = 9001
+    condition = {"for": "15m", "provider": "weather", "match": {"condition": "Clear"}}
+    state_manager.clear_hysteresis(rule_id)
+
+    # First tick starts the countdown; the rule must not activate yet.
+    assert _tick(rule_id, condition, True) is False
+    started = state_manager.get_hysteresis(rule_id)["condition_true_since"]
+    assert started is not None
+
+    # Subsequent ticks keep the same start time rather than resetting it.
+    assert _tick(rule_id, condition, True) is False
+    assert state_manager.get_hysteresis(rule_id)["condition_true_since"] == started
+
+    # Once 15m have passed the rule activates.
+    state_manager.set_hysteresis(
+        rule_id,
+        was_active=False,
+        condition_true_since=datetime.now(timezone.utc) - timedelta(minutes=16),
+    )
+    assert _tick(rule_id, condition, True) is True
+
+    # A false condition clears the timer so the next run starts over.
+    assert _tick(rule_id, condition, False) is False
+    assert state_manager.get_hysteresis(rule_id)["condition_true_since"] is None
+    state_manager.clear_hysteresis(rule_id)

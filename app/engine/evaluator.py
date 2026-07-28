@@ -117,15 +117,7 @@ class RuleEvaluator:
                 rule_name, rule_id, rule_priority, raw_match, final_match, rule_targets,
             )
 
-            state_manager.set_hysteresis(
-                rule_id,
-                was_active=final_match,
-                condition_true_since=(
-                    state_manager.get_hysteresis(rule_id)["condition_true_since"]
-                    if final_match
-                    else None
-                ),
-            )
+            self._record_hysteresis(rule_id, raw_match, final_match)
 
             if not final_match:
                 continue
@@ -396,6 +388,23 @@ class RuleEvaluator:
             "_sunset_dt": sunset_dt,
         }
         return adjusted, filtered
+
+    def _record_hysteresis(self, rule_id: int, raw_match: bool, final_match: bool):
+        """Persist the rule's hysteresis state after evaluation.
+
+        The pending timer is kept alive on raw_match, not final_match: while a
+        `for` gate counts down the rule is not yet active, and clearing the
+        timestamp then reset the countdown every tick so it never elapsed.
+        """
+        state_manager.set_hysteresis(
+            rule_id,
+            was_active=final_match,
+            condition_true_since=(
+                state_manager.get_hysteresis(rule_id)["condition_true_since"]
+                if raw_match
+                else None
+            ),
+        )
 
     def _apply_hysteresis(
         self, rule_id: int, condition: dict, raw_match: bool, provider_states: dict
