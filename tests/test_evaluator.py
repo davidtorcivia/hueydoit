@@ -159,3 +159,16 @@ def test_for_gate_activates_once_the_duration_elapses():
     assert _tick(rule_id, condition, False) is False
     assert state_manager.get_hysteresis(rule_id)["condition_true_since"] is None
     state_manager.clear_hysteresis(rule_id)
+
+
+def test_deadband_holds_the_rule_on_without_restarting_the_for_gate():
+    rule_id = 9002
+    # 48F is below the 50F threshold but within the 3-degree deadband.
+    condition = {"for": "15m", "deadband": 3, "provider": "weather",
+                 "match": {"temp_f": {"gte": 50}}}
+    started = datetime.now(timezone.utc) - timedelta(minutes=30)
+    state_manager.set_hysteresis(rule_id, was_active=True, condition_true_since=started)
+
+    assert _tick(rule_id, condition, False) is True
+    assert state_manager.get_hysteresis(rule_id)["condition_true_since"] == started
+    state_manager.clear_hysteresis(rule_id)

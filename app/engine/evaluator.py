@@ -395,13 +395,15 @@ class RuleEvaluator:
         The pending timer is kept alive on raw_match, not final_match: while a
         `for` gate counts down the rule is not yet active, and clearing the
         timestamp then reset the countdown every tick so it never elapsed.
+        final_match keeps it alive too, so a rule held on by its deadband
+        doesn't have to serve out a fresh countdown afterwards.
         """
         state_manager.set_hysteresis(
             rule_id,
             was_active=final_match,
             condition_true_since=(
                 state_manager.get_hysteresis(rule_id)["condition_true_since"]
-                if raw_match
+                if (raw_match or final_match)
                 else None
             ),
         )
